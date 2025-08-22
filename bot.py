@@ -1,15 +1,12 @@
-import time
-import traceback
-import logging
-import os
-from typing import Dict, Any, List, Union, Literal, Tuple
+from typing import Dict, Any, List, Union
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, RemoveMessage
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.memory import MemorySaver as CheckpointMemorySaver
 from langgraph.graph import START, END, MessagesState, StateGraph
-from typing import AsyncGenerator
 from langchain_openai import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
 from dotenv import load_dotenv
+from storage import get_messages, save_message
+
 
 load_dotenv()
 
@@ -23,7 +20,7 @@ class State(MessagesState):
 
 llm_chat_model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
 embeddings_generator = OpenAIEmbeddings(model="text-embedding-ada-002")
-memory_saver = MemorySaver()
+memory_saver = CheckpointMemorySaver()
 
 def memory_state_update(state: State) -> Dict[str, List[AIMessage]]:
     '''Update the memory state'''
@@ -31,6 +28,7 @@ def memory_state_update(state: State) -> Dict[str, List[AIMessage]]:
     #print(f"Initial state: {state}")
     #print(f"Initial message count: {len(state.get('messages', []))}")
 
+    thread_history = get_messages(state.get("thread_id"))
     last_human_message = state.get("messages")[-1]
     #print(f"Processing last human message: {last_human_message}")
     
@@ -41,18 +39,14 @@ def memory_state_update(state: State) -> Dict[str, List[AIMessage]]:
     existing_messages = []
     summary = ""
 
-    #print(f"retreving messages for thread id: {thread_id}")
-    thread_history = [] #TODO: Fetch all messages from storage for the given thread_id
-    #print(f"Retrieved {len(thread_history)} messages from storage")
-
     if thread_history:
         for msg_pair in thread_history:
-            if msg_pair.user_message:
-                existing_messages.append(HumanMessage(content=msg_pair.user_message))
-            if msg_pair.ai_message:
-                existing_messages.append(AIMessage(content=msg_pair.ai_message))
-            if msg_pair.summary:
-                summary = msg_pair.summary
+            if msg_pair['user_message']:
+                existing_messages.append(HumanMessage(content=msg_pair['user_message']))
+            if msg_pair['ai_message']:
+                existing_messages.append(AIMessage(content=msg_pair['ai_message']))
+            if msg_pair['summary']:
+                summary = msg_pair['summary']
                 #print(f"Retrieved summary: {summary}")
 
     #print(f'Update state with messages')
@@ -67,7 +61,7 @@ def memory_state_update(state: State) -> Dict[str, List[AIMessage]]:
     }
 
     #print(f"Memory state update complete. New message count: {len(all_messages)}")
-    #print(f"Final state after memory update: {new_state}")
+    # print(f"Final state after memory update: {new_state}")
     return new_state
 
 def call_model(state: State) -> Dict[str, List[AIMessage]]:
@@ -124,7 +118,10 @@ def call_model(state: State) -> Dict[str, List[AIMessage]]:
     #print('state before response', state)
     
     # Create an generator for the response
+    print(f"Question: {question}")
     response = llm_chat_model.invoke(question)
+
+    save_message(state.get("thread_id"), state["messages"][-1].content, response.content, state.get("summary", ""))
 
     return {
         "messages": [response]
@@ -220,7 +217,7 @@ def summarize_conversation(state: State) -> Dict[str, Any]:
         summary_message = "Create a summary of the conversation above:"
 
     messages = state["messages"] + [HumanMessage(content=summary_message)]
-    response = llm_chat_model.stream(messages)
+    response = llm_chat_model.invoke(messages)
     
     delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-2]]
     
@@ -274,7 +271,7 @@ graph = build()
 messages = [
     'Hello',
     'My name is Gopal',
-    'Who am I'
+    'What is my name'
 ]
 for message in messages:
     for chunk in graph.stream({"messages": [message], "thread_id": 1}, config={"configurable": {"thread_id": 1}}):
