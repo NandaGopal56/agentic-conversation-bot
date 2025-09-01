@@ -39,8 +39,13 @@ def get_messages(thread_id: int) -> List[Dict[str, Any]]:
 
 def save_message(thread_id: int, user_message: str, ai_message: str, summary: str):
     cursor = connection.cursor()
-    print(thread_id, user_message, ai_message, summary)
+    # print(thread_id, user_message, ai_message, summary)
     cursor.execute("INSERT INTO messages (thread_id, user_message, ai_message, summary) VALUES (?, ?, ?, ?)", (thread_id, user_message, ai_message, summary))
+    connection.commit()
+
+def delete_messages(thread_id: int):
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM messages WHERE thread_id = ?", (thread_id,))
     connection.commit()
 
 if __name__ == "__main__":
