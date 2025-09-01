@@ -70,126 +70,95 @@ from langchain.prompts import ChatPromptTemplate
 def call_model(state: dict) -> dict:
     """Build structured prompt with correct order and all context pieces."""
     print(state)
-    
-    # Build prompt parts conditionally
-    prompt_parts = []
-    
-    # Base instructions
+
+    messages = state.get("messages", [])
+    current_message = None
+    conversation_history = []
+
+    if messages:
+        # Last human message is the current message
+        current_message = messages[-1].content if messages[-1].type == "human" else None
+        # All previous messages are conversation history
+        conversation_history = messages[:-1] if current_message else messages
+
+    # Recent history: last 2 exchanges
+    recent_history = conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
+
+    # ----------------
+    # Build system context
+    # ----------------
+    context_parts = []
+
     base_instruction = (
         "You are a helpful AI assistant. Answer all questions to the best of your ability. "
         "Use the provided context information when relevant to answer the user's question. "
         "If you are not aware of any information, explicitly say so instead of making things up. "
         "Maintain a conversational and helpful tone throughout your responses."
     )
-    prompt_parts.append(("system", base_instruction))
-    
-    # Add summary context if available
+    context_parts.append(base_instruction)
+
     if state.get("summary") and state["summary"].strip():
-        summary_context = (
+        context_parts.append(
             "=== CONVERSATION SUMMARY CONTEXT ===\n"
-            "The following is a summary of earlier parts of this conversation:\n\n"
+            "The following is a summary of earlier parts of this conversation:\n"
             f"{state['summary']}\n"
             "=== END CONVERSATION SUMMARY ==="
         )
-        prompt_parts.append(("system", summary_context))
-    
-    # Add doc RAG results if available
+
     if state.get("doc_rag_results") and state["doc_rag_results"].strip():
-        doc_context = (
+        context_parts.append(
             "=== DOCUMENT KNOWLEDGE CONTEXT ===\n"
-            "The following relevant information has been retrieved from documents that may help answer the user's question:\n\n"
+            "The following relevant information has been retrieved from documents:\n"
             f"{state['doc_rag_results']}\n"
             "=== END DOCUMENT CONTEXT ==="
         )
-        prompt_parts.append(("system", doc_context))
-    
-    # Add web RAG results if available
+
     if state.get("web_rag_results") and state["web_rag_results"].strip():
-        web_context = (
+        context_parts.append(
             "=== WEB SEARCH CONTEXT ===\n"
-            "The following relevant information has been retrieved from web search that may help answer the user's question:\n\n"
+            "The following relevant information has been retrieved from web search:\n"
             f"{state['web_rag_results']}\n"
             "=== END WEB SEARCH CONTEXT ==="
         )
-        prompt_parts.append(("system", web_context))
-    
-    # Extract and separate current message from conversation history
-    messages = state.get("messages", [])
-    current_message = None
-    conversation_history = []
-    
-    if messages:
-        # Find the last human message as current message
-        for i in range(len(messages) - 1, -1, -1):
-            msg = messages[i]
-            msg_role = None
-            msg_content = None
-            
-            if hasattr(msg, 'content') and hasattr(msg, 'type'):
-                msg_role = "user" if msg.type == "human" else "assistant"
-                msg_content = msg.content
-            elif isinstance(msg, dict):
-                msg_role = "user" if msg.get("role") == "human" else "assistant"
-                msg_content = msg.get("content", "")
-            elif isinstance(msg, tuple) and len(msg) == 2:
-                role, content = msg
-                msg_role = "user" if role == "human" else "assistant"
-                msg_content = content
-            
-            if msg_role == "user" and msg_content and msg_content.strip():
-                current_message = msg_content
-                conversation_history = messages[:i]  # Everything before current message
-                break
-    
-    # Add recent conversation history (last 4 messages: 2 user + 2 assistant)
-    if conversation_history and len(conversation_history) > 0:
-        # Get last 4 messages from conversation history
-        recent_history = conversation_history[-4:] if len(conversation_history) >= 4 else conversation_history
-        
-        if recent_history:
-            prompt_parts.append(("system", "=== RECENT CONVERSATION HISTORY ==="))
-            
-            for msg in recent_history:
-                msg_role = None
-                msg_content = None
-                
-                if hasattr(msg, 'content') and hasattr(msg, 'type'):
-                    msg_role = "user" if msg.type == "human" else "assistant"
-                    msg_content = msg.content
-                elif isinstance(msg, dict):
-                    msg_role = "user" if msg.get("role") == "human" else "assistant"
-                    msg_content = msg.get("content", "")
-                elif isinstance(msg, tuple) and len(msg) == 2:
-                    role, content = msg
-                    msg_role = "user" if role == "human" else "assistant"
-                    msg_content = content
-                
-                if msg_content and msg_content.strip():
-                    prompt_parts.append((msg_role, msg_content))
-            
-            prompt_parts.append(("system", "=== END RECENT CONVERSATION HISTORY ==="))
-    
-    # Add the current message as user input
+
+    if recent_history:
+        history_text = "=== RECENT CONVERSATION CONTEXT ===\n"
+        history_text += "The following shows the last 2 messages from your recent conversation:\n"
+        for msg in recent_history:
+            role = "User" if msg.type == "human" else "Assistant"
+            history_text += f"[{role}] {msg.content}\n"
+        history_text += "=== END RECENT CONVERSATION CONTEXT ==="
+        context_parts.append(history_text)
+
+    # Combine all context into ONE system message at the top
+    combined_context = "\n\n".join(context_parts)
+
+    # ----------------
+    # Build prompt
+    # ----------------
+    prompt_parts = [("system", combined_context)]
+
     if current_message:
         prompt_parts.append(("user", current_message))
-    
-    # Create ChatPromptTemplate
+
     chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
-    
-    # Debug print with more details
+
+    # Debug
     print("=== STATE DEBUG ===")
     print(f"Summary exists: {bool(state.get('summary'))}")
     print(f"Doc RAG exists: {bool(state.get('doc_rag_results'))}")
     print(f"Web RAG exists: {bool(state.get('web_rag_results'))}")
-    print(f"Total messages count: {len(state.get('messages', []))}")
+    print(f"Total messages count: {len(messages)}")
     print(f"Current message extracted: {bool(current_message)}")
     print(f"History messages count: {len(conversation_history)}")
+    print(f"Recent history count: {len(recent_history)}")
     print(f"Total prompt parts: {len(prompt_parts)}")
+    print(f"Prompt: {chat_prompt.format_messages()}")
     print("===================")
-    
-    # Call LLM with the chat prompt
+
+    # Call LLM
     response = llm_chat_model.invoke(chat_prompt.format_messages())
-    
+
     return {"messages": [response]}
 
 
