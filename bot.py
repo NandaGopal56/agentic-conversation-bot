@@ -1,7 +1,8 @@
+import langchain
+
 from typing import Dict, Any, List, Union
 from dotenv import load_dotenv
 
-import langchain
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, RemoveMessage
 from langgraph.checkpoint.memory import MemorySaver as CheckpointMemorySaver
 from langgraph.graph import START, END, MessagesState, StateGraph
@@ -11,9 +12,6 @@ from langchain_openai.embeddings import OpenAIEmbeddings
 from storage import get_messages, save_message, delete_messages
 
 load_dotenv()
-
-# langchain.debug = True
-
 
 # ------------------------------
 # State Definition
