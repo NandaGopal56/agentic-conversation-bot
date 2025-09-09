@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from communication_bus.inmemory_bus import bus
+from communication_bus.inmemory_bus import InMemoryBus, bus
 from .receiver import on_voice_command
 
 logger = logging.getLogger(__name__)
@@ -9,7 +9,7 @@ class AgentService:
     """Service for managing agent lifecycle and message handling."""
 
     def __init__(self):
-        self.bus = bus
+        self.bus: InMemoryBus = bus
         self._is_running = False
         self._run_task: asyncio.Task | None = None
 

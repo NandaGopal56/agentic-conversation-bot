@@ -1,6 +1,12 @@
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Import required modules
 import asyncio
 import logging
-from audio_processor.main import AudioProcessorService
+from audio_processor.audio_processor_service import AudioProcessorService
 from agents.agent_service import AgentService
 
 # Configure logging
@@ -39,10 +45,13 @@ async def async_main():
         logger.exception("An error occurred:")
     finally:
         logger.info("Shutting down services...")
+
+        # stop all the services
         await asyncio.gather(
             audio_processor.stop(),
             agent_service.stop()
         )
+        
         logger.info("Agetic Conversation Bot has been shut down")
 
 

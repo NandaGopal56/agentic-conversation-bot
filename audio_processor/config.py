@@ -1,6 +1,5 @@
 '''Configuration settings for the voice assistant'''
 
-import os
 from dataclasses import dataclass
 from typing import List
 
@@ -12,17 +11,6 @@ class AudioConfig:
     record_timeout: float = 2.0
     phrase_timeout: float = 3.0
     dynamic_energy_threshold: bool = False
-
-@dataclass
-class ModelConfig:
-    '''Whisper model configuration'''
-    model_size: str = "small"
-    language: str = "en" 
-
-    @property
-    def model_name(self) -> str:
-        '''Get the full model name with language suffix'''
-        return f"{self.model_size}.{self.language}"
 
 @dataclass
 class WakeWordConfig:
@@ -43,6 +31,5 @@ class SystemConfig:
 
 # Global configuration instances
 AUDIO_CONFIG = AudioConfig()
-MODEL_CONFIG = ModelConfig()
 WAKE_WORD_CONFIG = WakeWordConfig()
 SYSTEM_CONFIG = SystemConfig()

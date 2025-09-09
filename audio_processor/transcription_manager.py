@@ -1,11 +1,8 @@
 '''Transcription management and conversation handling (async)'''
 
-import whisper
 from datetime import datetime
 from typing import Optional
-from .config import MODEL_CONFIG
-import asyncio
-
+from .openai_transcription import transcribe_audio_by_openai
 
 class ConversationSession:
     '''Single conversation session with sentences'''
@@ -48,18 +45,14 @@ class TranscriptionManager:
     '''Manages transcription and sessions'''
     
     def __init__(self):
-        self.model = whisper.load_model(MODEL_CONFIG.model_name)
         self.current_session = ConversationSession()
-        print(f"Whisper model loaded: {MODEL_CONFIG.model_name}")
     
     async def transcribe_audio(self, audio_np) -> Optional[str]:
         '''Transcribe audio'''
         if len(audio_np) == 0:
             return None
         try:
-            # Run blocking whisper call in executor
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(None, self.model.transcribe, audio_np)
+            result = await transcribe_audio_by_openai(audio_np)
             return result['text'].strip() if result['text'].strip() else None
         except Exception as e:
             print(f"Transcription error: {e}")
@@ -74,7 +67,7 @@ class TranscriptionManager:
         if len(self.current_session.accumulated_audio) == 0:
             return None
             
-        # Convert to numpy for whisper
+        # Convert to numpy
         import numpy as np
         audio_np = np.frombuffer(
             self.current_session.accumulated_audio, 

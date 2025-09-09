@@ -1,10 +1,8 @@
 '''Wake word detection functionality - ASYNC VERSION'''
 
-import time
 from datetime import datetime, timedelta
 from typing import List, Optional
 from .config import WAKE_WORD_CONFIG
-import asyncio
 
 class WakeWordDetector:
     '''Handles wake word detection and activation state'''
