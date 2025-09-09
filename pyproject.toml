@@ -1,0 +1,16 @@
+[project]
+name = "agetic-conversation-bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "langchain>=0.3.27",
+    "langgraph>=0.6.7",
+    "numpy>=2.2.6",
+    "openai>=1.107.0",
+    "openai-whisper>=20250625",
+    "pyaudio>=0.2.14",
+    "python-dotenv>=1.1.1",
+    "speechrecognition>=3.14.3",
+]
