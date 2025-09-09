@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from audio_processor.main import AudioProcessorService
-from communication_bus.inmemory_bus import InMemoryBus
+from agents.agent_service import AgentService
 
 # Configure logging
 logging.basicConfig(
@@ -14,26 +14,35 @@ logger = logging.getLogger(__name__)
 async def async_main():
     """Async main entry point for the Agetic Conversation Bot."""
     audio_processor = None
-    stop_event = asyncio.Event()
-
+    agent_service = None
+    
     try:
         logger.info("Starting Agetic Conversation Bot...")
-
+        
+        # Initialize services with the shared bus
         audio_processor = AudioProcessorService()
+        agent_service = AgentService()
 
         # Start services
-        await audio_processor.start()
-
-        # Wait until stop_event is set (instead of while True loop)
-        await stop_event.wait()
-
+        await asyncio.gather(
+            audio_processor.start(),
+            agent_service.start()
+        )
+        
+        # Keep the application running until interrupted
+        while True:
+            await asyncio.sleep(1)
+            
     except asyncio.CancelledError:
         logger.info("Shutdown signal received...")
     except Exception:
         logger.exception("An error occurred:")
     finally:
-        if audio_processor and hasattr(audio_processor, 'stop'):
-            await audio_processor.stop()
+        logger.info("Shutting down services...")
+        await asyncio.gather(
+            audio_processor.stop(),
+            agent_service.stop()
+        )
         logger.info("Agetic Conversation Bot has been shut down")
 
 

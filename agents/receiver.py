@@ -19,13 +19,7 @@ def on_voice_command(topic: str, payload: Dict[str, Any]) -> None:
     try:
         logger.info(f"Processing voice command on {topic}")
         # Process the command here
-        logger.debug(f"Command data: {payload}")
+        logger.info(f"Command data: {payload}")
         
-        # Example processing
-        if 'text' in payload:
-            logger.info(f"Command text: {payload['text']}")
-            
     except Exception as e:
         logger.error(f"Error processing voice command: {e}", exc_info=True)
-
-

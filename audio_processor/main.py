@@ -6,7 +6,7 @@ import traceback
 from sys import platform
 from typing import Optional
 
-from communication_bus.inmemory_bus import InMemoryBus
+from communication_bus.inmemory_bus import bus
 from .config import AUDIO_CONFIG, MODEL_CONFIG, WAKE_WORD_CONFIG, SYSTEM_CONFIG
 from .voice_assistant import VoiceProcessor
 
@@ -17,8 +17,8 @@ class AudioProcessorService:
     
     def __init__(self):
         """Initialize the audio processor service."""
-        self.bus = InMemoryBus()
-        self.assistant: Optional[VoiceProcessor] = None
+        self.bus = bus
+        self.assistant = VoiceProcessor(self.bus)
         self._is_running = False
         self._run_task: Optional[asyncio.Task] = None
     
@@ -32,9 +32,6 @@ class AudioProcessorService:
             # Connect to the message bus
             await self.bus.connect()
             
-            # Initialize voice assistant with message bus
-            self.assistant = VoiceProcessor()
-            
             # Start the assistant in a separate task
             self._is_running = True
             self._run_task = asyncio.create_task(self._run())
@@ -42,6 +39,7 @@ class AudioProcessorService:
         except Exception as e:
             logger.error(f"Failed to start audio processor: {e}", exc_info=True)
             self._is_running = False
+            await self.bus.disconnect()
             raise
     
     async def _run(self) -> None:

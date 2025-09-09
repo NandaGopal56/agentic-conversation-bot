@@ -14,7 +14,8 @@ from communication_bus.inmemory_bus import InMemoryBus
 class VoiceProcessor:
     '''Main voice assistant that coordinates all components (async)'''
     
-    def __init__(self):
+    def __init__(self, bus: InMemoryBus):
+        self.bus = bus
         self.audio_handler = AudioHandler()
         self.wake_word_detector = WakeWordDetector()
         self.transcription_manager = TranscriptionManager()
@@ -24,6 +25,7 @@ class VoiceProcessor:
         self.sentence_pause_timeout = 2.5
         self.is_running = False
         self.is_speaking = False
+
 
     async def _display_status(self):
         '''Display simple status'''
@@ -39,11 +41,7 @@ class VoiceProcessor:
         conversation_event = await self.transcription_manager.get_conversation_event()
         print(conversation_event)
 
-        bus = InMemoryBus()
-        await bus.connect()
-        await bus.publish("voice/commands", conversation_event)
-        
-        print()
+        await self.bus.publish("voice/commands", conversation_event)
     
     async def _process_transcription(self, text: str, sentence_complete: bool):
         '''Process transcribed text'''

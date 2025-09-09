@@ -59,8 +59,7 @@ class InMemoryBus:
 
     async def publish(self, topic: str, payload: Dict[str, Any]):
         """Publish a message to a topic."""
-        if "timestamp" not in payload:
-            payload["timestamp"] = datetime.now().isoformat()
+        logger.debug(f"Publishing to {topic}: {payload}")
         await self.queue.put((topic, payload))
         logger.debug(f"Published to {topic}: {payload}")
 
@@ -95,3 +94,6 @@ class InMemoryBus:
                 if not self.callbacks[topic]:
                     del self.callbacks[topic]
                     logger.info(f"Unsubscribed from {topic} (no more callbacks)")
+
+
+bus = InMemoryBus()
