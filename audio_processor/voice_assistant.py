@@ -39,9 +39,9 @@ class VoiceProcessor:
         conversation_event = await self.transcription_manager.get_conversation_event()
         print(conversation_event)
 
-        # bus = InMemoryBus()
-        # await bus.connect()
-        # await bus.publish("voice/commands", conversation_event)
+        bus = InMemoryBus()
+        await bus.connect()
+        await bus.publish("voice/commands", conversation_event)
         
         print()
     

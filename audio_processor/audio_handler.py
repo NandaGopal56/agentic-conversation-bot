@@ -3,7 +3,6 @@
 import asyncio
 import numpy as np
 import speech_recognition as sr
-from queue import Queue
 from typing import Optional, Callable, Awaitable, Union
 from sys import platform
 from .config import AUDIO_CONFIG, SYSTEM_CONFIG

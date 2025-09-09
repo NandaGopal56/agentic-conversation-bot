@@ -4,7 +4,7 @@ import logging
 import sys
 import traceback
 from sys import platform
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from communication_bus.inmemory_bus import InMemoryBus
 from .config import AUDIO_CONFIG, MODEL_CONFIG, WAKE_WORD_CONFIG, SYSTEM_CONFIG
