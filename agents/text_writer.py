@@ -1,31 +1,16 @@
-import asyncio
+
 from communication_bus.inmemory_bus import bus
+from typing import Dict, Any
+import logging
 
+logger = logging.getLogger(__name__)
 
-
-
-paragraph = f"""
-    The first move is what sets everything in motion. 
-    Every step that follows is guided by that initial decision. 
-    In life, just like in chess, momentum is everything.
-    A small misstep can throw off your entire strategy.
-    We must be prepared for the unexpected.
-    """
-
-def stream_words(text, chunk_size=3):
-    """Yield text in chunks of whole words (simulate LLM streaming)."""
-    words = text.split()
-    for i in range(0, len(words), chunk_size):
-        yield " ".join(words[i:i+chunk_size])
-
-async def stream_response():
-    await bus.connect()
-    # Simulate LLM streaming words
-    for chunk in stream_words(paragraph, chunk_size=3):
-        print(f"LLM streamed: {chunk}")
-        await bus.publish("voice/commands/llm_response", {"text": chunk})
-        await asyncio.sleep(0.5)  # simulate LLM streaming delay
-
-async def main():
-    await stream_response()
-    
+async def write_response_to_bus(payload: Dict[str, Any]):
+    '''
+    This function is used to write the response to the bus
+    '''
+    try:
+        await bus.connect()
+        await bus.publish("voice/commands/llm_response", payload)
+    except Exception as e:
+        logger.error(f"Error writing response to bus: {e}", exc_info=True)

@@ -2,7 +2,6 @@ import asyncio
 import logging
 from communication_bus.inmemory_bus import InMemoryBus, bus
 from .receiver import on_voice_command
-from .text_writer import main
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +34,6 @@ class AgentService:
             self._is_running = True
             self._run_task = asyncio.create_task(self._run())
             logger.info("Agent Service started")
-
-            asyncio.create_task(main())
 
         except Exception as e:
             logger.error(f"Failed to start agent service: {e}", exc_info=True)
