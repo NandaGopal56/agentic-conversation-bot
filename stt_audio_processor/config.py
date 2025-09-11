@@ -8,8 +8,8 @@ class AudioConfig:
     '''Audio processing configuration'''
     sample_rate: int = 16000
     energy_threshold: int = 1000
-    record_timeout: float = 2.0
-    phrase_timeout: float = 3.0
+    max_record_time: float = 10.0
+    sentence_pause_timeout: float = 2
     dynamic_energy_threshold: bool = False
 
 @dataclass

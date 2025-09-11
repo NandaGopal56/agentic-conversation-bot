@@ -1,8 +1,11 @@
 '''Wake word detection functionality - ASYNC VERSION'''
 
+import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 from .config import WAKE_WORD_CONFIG
+
+logger = logging.getLogger(__name__)
 
 class WakeWordDetector:
     '''Handles wake word detection and activation state'''
@@ -29,7 +32,7 @@ class WakeWordDetector:
         
         for wake_word in self.wake_words:
             if wake_word.lower() in text_lower:
-                print(f"Wake word detected: '{wake_word}'")
+                logger.info(f"Wake word detected: '{wake_word}'")
                 await self._activate()
                 return True
         
@@ -41,14 +44,14 @@ class WakeWordDetector:
         self.activation_time = datetime.now()
         self.last_wake_detection = datetime.now()
         self.last_speech_activity = datetime.now()
-        print("Assistant activated! Listening for commands...")
+        logger.info("Assistant activated! Listening for commands...")
     
     async def deactivate(self):
         '''Deactivate the assistant'''
         self.is_active = False
         self.activation_time = None
         self.last_speech_activity = None
-        print("Assistant deactivated. Waiting for wake word...")
+        logger.info("Assistant deactivated. Waiting for wake word...")
     
     async def update_activity(self):
         '''Update activation state based on timeout - only when NOT speaking'''

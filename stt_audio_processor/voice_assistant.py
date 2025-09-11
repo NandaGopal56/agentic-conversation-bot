@@ -1,5 +1,6 @@
-'''Main voice assistant coordinator (async version)'''
+'''Main voice assistant coordinator'''
 
+import logging
 import os
 import asyncio
 from datetime import datetime, timedelta
@@ -8,11 +9,14 @@ from typing import Optional
 from .audio_handler import AudioHandler
 from .wake_word_detector import WakeWordDetector
 from .transcription_manager import TranscriptionManager
+from .config import AUDIO_CONFIG
 
 from communication_bus.inmemory_bus import InMemoryBus
 
+logger = logging.getLogger(__name__)
+
 class VoiceProcessor:
-    '''Main voice assistant that coordinates all components (async)'''
+    '''Main voice assistant that coordinates all components'''
     
     def __init__(self, bus: InMemoryBus):
         self.bus = bus
@@ -22,7 +26,7 @@ class VoiceProcessor:
         
         # State management
         self.last_audio_time: Optional[datetime] = None
-        self.sentence_pause_timeout = 2.5
+        self.sentence_pause_timeout = AUDIO_CONFIG.sentence_pause_timeout
         self.is_running = False
         self.is_speaking = False
 
@@ -33,13 +37,13 @@ class VoiceProcessor:
         if wake_status['is_active']:
             status = "LISTENING" if not self.is_speaking else "SPEAKING"
             remaining = wake_status.get('time_remaining', 0)
-            print(f"Status: {status} ({remaining:.0f}s)")
+            logger.info(f"Status: {status} ({remaining:.0f}s)")
         else:
             wake_words = ' or '.join(wake_status['wake_words'])
-            print(f"Status: SLEEPING - Say '{wake_words}' to wake")
+            logger.info(f"Status: SLEEPING - Say '{wake_words}' to wake")
         
         conversation_event = await self.transcription_manager.get_conversation_event()
-        print(conversation_event)
+        logger.info(conversation_event)
 
         await self.bus.publish("voice/commands", conversation_event)
     
@@ -55,7 +59,6 @@ class VoiceProcessor:
         if sentence_complete:
             await self.transcription_manager.add_completed_sentence(text)
             self.is_speaking = False
-            print()
             await self._display_status()
     
     async def run(self):
@@ -102,6 +105,6 @@ class VoiceProcessor:
     
     async def stop(self):
         '''Stop the voice assistant'''
-        print("Stopping...")
+        logger.info("Stopping...")
         self.is_running = False
-        print("Goodbye")
+        logger.info("Goodbye")

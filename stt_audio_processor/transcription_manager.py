@@ -1,8 +1,11 @@
 '''Transcription management and conversation handling (async)'''
-
+import logging
+import numpy as np
 from datetime import datetime
 from typing import Optional
 from .openai_transcription import transcribe_audio_by_openai
+
+logger = logging.getLogger(__name__)
 
 class ConversationSession:
     '''Single conversation session with sentences'''
@@ -55,7 +58,7 @@ class TranscriptionManager:
             result = await transcribe_audio_by_openai(audio_np)
             return result['text'].strip() if result['text'].strip() else None
         except Exception as e:
-            print(f"Transcription error: {e}")
+            logger.error(f"Transcription error: {e}")
             return None
     
     async def accumulate_audio(self, audio_data: bytes):
@@ -68,7 +71,6 @@ class TranscriptionManager:
             return None
             
         # Convert to numpy
-        import numpy as np
         audio_np = np.frombuffer(
             self.current_session.accumulated_audio, 
             dtype=np.int16

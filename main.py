@@ -6,7 +6,7 @@ load_dotenv()
 # Import required modules
 import asyncio
 import logging
-from audio_processor.audio_processor_service import AudioProcessorService
+from stt_audio_processor.audio_processor_service import AudioProcessorService
 from agents.agent_service import AgentService
 
 # Configure logging
@@ -19,19 +19,19 @@ logger = logging.getLogger(__name__)
 
 async def async_main():
     """Async main entry point for the Agetic Conversation Bot."""
-    audio_processor = None
+    stt_audio_processor = None
     agent_service = None
     
     try:
         logger.info("Starting Agetic Conversation Bot...")
         
         # Initialize services with the shared bus
-        audio_processor = AudioProcessorService()
+        stt_audio_processor = AudioProcessorService()
         agent_service = AgentService()
 
         # Start services
         await asyncio.gather(
-            audio_processor.start(),
+            stt_audio_processor.start(),
             agent_service.start()
         )
         
@@ -48,7 +48,7 @@ async def async_main():
 
         # stop all the services
         await asyncio.gather(
-            audio_processor.stop(),
+            stt_audio_processor.stop(),
             agent_service.stop()
         )
         
