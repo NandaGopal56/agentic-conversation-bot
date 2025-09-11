@@ -1,13 +1,12 @@
 import asyncio
 import logging
 from communication_bus.inmemory_bus import InMemoryBus, bus
-from .receiver import on_voice_command
-from .text_writer import main
+from .text_reader import on_llm_response
 
 logger = logging.getLogger(__name__)
 
-class AgentService:
-    """Service for managing agent lifecycle and message handling."""
+class TTSService:
+    """Service for managing TTS lifecycle and message handling."""
 
     def __init__(self):
         self.bus: InMemoryBus = bus
@@ -15,41 +14,39 @@ class AgentService:
         self._run_task: asyncio.Task | None = None
 
     async def _run(self):
-        """Main agent loop (extend later for AI processing)."""
+        """Main TTS loop (extend later for TTS processing)."""
         while self._is_running:
             await asyncio.sleep(0.5)  # placeholder loop
             # could add periodic work here if needed
-        logger.info("Agent loop stopped")
+        logger.info("TTS loop stopped")
 
     async def start(self, **kwargs) -> None:
-        """Start the agent service asynchronously."""
+        """Start the TTS service asynchronously."""
         if self._is_running:
-            logger.warning("Agent service already running")
+            logger.warning("TTS service already running")
             return
 
         try:
-            logger.info("Starting Agent Service...")
+            logger.info("Starting TTS Service...")
             await self.bus.connect()
-            self.bus.subscribe("voice/commands", on_voice_command)
+            self.bus.subscribe("voice/commands/llm_response", on_llm_response)
 
             self._is_running = True
             self._run_task = asyncio.create_task(self._run())
-            logger.info("Agent Service started")
-
-            asyncio.create_task(main())
+            logger.info("TTS Service started")
 
         except Exception as e:
-            logger.error(f"Failed to start agent service: {e}", exc_info=True)
+            logger.error(f"Failed to start TTS service: {e}", exc_info=True)
             self._is_running = False
             await self.bus.disconnect()
             raise
 
     async def stop(self) -> None:
-        """Stop the agent service and clean up resources."""
+        """Stop the TTS service and clean up resources."""
         if not self._is_running:
             return
 
-        logger.info("Stopping Agent Service...")
+        logger.info("Stopping TTS Service...")
         self._is_running = False
 
         if self._run_task:
@@ -60,4 +57,4 @@ class AgentService:
                 pass
 
         await self.bus.disconnect()
-        logger.info("Agent Service stopped")
+        logger.info("TTS Service stopped")

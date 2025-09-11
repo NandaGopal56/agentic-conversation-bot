@@ -8,6 +8,7 @@ import asyncio
 import logging
 from stt_audio_processor.audio_processor_service import AudioProcessorService
 from agents.agent_service import AgentService
+from tts_audio_processor.tts_processor import TTSService
 
 # Configure logging
 logging.basicConfig(
@@ -28,11 +29,13 @@ async def async_main():
         # Initialize services with the shared bus
         stt_audio_processor = AudioProcessorService()
         agent_service = AgentService()
+        tts_processor = TTSService()
 
         # Start services
         await asyncio.gather(
             stt_audio_processor.start(),
-            agent_service.start()
+            agent_service.start(),
+            tts_processor.start()
         )
         
         # Keep the application running until interrupted
@@ -49,7 +52,8 @@ async def async_main():
         # stop all the services
         await asyncio.gather(
             stt_audio_processor.stop(),
-            agent_service.stop()
+            agent_service.stop(),
+            tts_processor.stop()
         )
         
         logger.info("Agetic Conversation Bot has been shut down")

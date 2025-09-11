@@ -1,7 +1,7 @@
 [project]
 name = "agetic-conversation-bot"
 version = "0.1.0"
-description = "Add your description here"
+description = "Agetic Conversation Bot with TTS and STT and LLM"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
