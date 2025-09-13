@@ -4,10 +4,17 @@ import numpy as np
 from openai import OpenAI
 from typing import Optional, Dict, Any
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 client = OpenAI()
 
-async def transcribe_audio_by_openai(audio_np: np.ndarray, sample_rate: int = 16000) -> Optional[Dict[str, Any]]:
+async def transcribe_audio_by_openai(
+    audio_np: np.ndarray, 
+    sample_rate: int = 16000,
+    model: str = "gpt-4o-mini-transcribe"
+) -> Optional[Dict[str, Any]]:
     """Convert numpy array to WAV in memory and send to OpenAI for transcription."""
     try:
         # Convert float32 to int16 if needed
@@ -28,7 +35,7 @@ async def transcribe_audio_by_openai(audio_np: np.ndarray, sample_rate: int = 16
             # Send to OpenAI
             transcription = await asyncio.to_thread(
                 client.audio.transcriptions.create,
-                model="gpt-4o-mini-transcribe",
+                model=model,
                 file=("audio.wav", wav_buffer, "audio/wav"),
                 response_format="json",
                 language="en",
@@ -40,5 +47,5 @@ async def transcribe_audio_by_openai(audio_np: np.ndarray, sample_rate: int = 16
             }
             
     except Exception as e:
-        print(f"Transcription error: {e}")
+        logger.error(f"Transcription error: {e}")
         return None

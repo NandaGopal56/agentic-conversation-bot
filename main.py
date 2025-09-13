@@ -6,9 +6,9 @@ load_dotenv()
 # Import required modules
 import asyncio
 import logging
-from stt_audio_processor.audio_processor_service import AudioProcessorService
-from agents.agent_service import AgentService
+from stt_audio_processor.audio_processor import AudioProcessorService
 from tts_audio_processor.tts_processor import TTSService
+from agents.agent_service import AgentService
 
 # Configure logging
 logging.basicConfig(

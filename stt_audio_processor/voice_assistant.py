@@ -8,7 +8,7 @@ from typing import Optional
 
 from .audio_handler import AudioHandler
 from .wake_word_detector import WakeWordDetector
-from .transcription_manager import TranscriptionManager
+from .transcription_manager import ConversationManager
 from .config import AUDIO_CONFIG
 
 from communication_bus.inmemory_bus import InMemoryBus
@@ -22,7 +22,7 @@ class VoiceProcessor:
         self.bus = bus
         self.audio_handler = AudioHandler()
         self.wake_word_detector = WakeWordDetector()
-        self.transcription_manager = TranscriptionManager()
+        self.conversation_manager = ConversationManager()
         
         # State management
         self.last_audio_time: Optional[datetime] = None
@@ -42,7 +42,7 @@ class VoiceProcessor:
             wake_words = ' or '.join(wake_status['wake_words'])
             logger.info(f"Status: SLEEPING - Say '{wake_words}' to wake")
         
-        conversation_event = await self.transcription_manager.get_conversation_event()
+        conversation_event = await self.conversation_manager.get_conversation_event()
         logger.info(conversation_event)
 
         await self.bus.publish("voice/commands", conversation_event)
@@ -51,13 +51,13 @@ class VoiceProcessor:
         '''Process transcribed text'''
         if not self.wake_word_detector.is_active:
             if await self.wake_word_detector.check_for_wake_word(text):
-                await self.transcription_manager.start_new_session()
+                await self.conversation_manager.start_new_session()
             return
         
         await self.wake_word_detector.extend_activation()
         
         if sentence_complete:
-            await self.transcription_manager.add_completed_sentence(text)
+            await self.conversation_manager.add_completed_sentence(text)
             self.is_speaking = False
             await self._display_status()
     
@@ -75,13 +75,13 @@ class VoiceProcessor:
                 if audio_data:
                     self.last_audio_time = current_time
                     self.is_speaking = True
-                    await self.transcription_manager.accumulate_audio(audio_data)
+                    await self.conversation_manager.accumulate_audio(audio_data)
                 
                 else:
                     if (self.is_speaking and self.last_audio_time and 
                         current_time - self.last_audio_time > timedelta(seconds=self.sentence_pause_timeout)):
                         
-                        text = await self.transcription_manager.transcribe_accumulated_audio()
+                        text = await self.conversation_manager.transcribe_accumulated_audio()
                         if text:
                             await self._process_transcription(text, sentence_complete=True)
                     
@@ -94,7 +94,7 @@ class VoiceProcessor:
                     
                     if was_active != self.wake_word_detector.is_active:
                         if not self.wake_word_detector.is_active:
-                            await self.transcription_manager.end_current_session()
+                            await self.conversation_manager.end_current_session()
                             self.is_speaking = False
                         await self._display_status()
                     
