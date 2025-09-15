@@ -1,12 +1,23 @@
 '''Audio recording and processing functionality'''
 import logging
+import os
 import asyncio
-import numpy as np
 import speech_recognition as sr
 from typing import Optional
 from sys import platform
 from .config import AUDIO_CONFIG, SYSTEM_CONFIG
 
+
+# Ensure logs directory exists
+os.makedirs("logs", exist_ok=True)
+
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    # create the files with dir if not available
+    handlers=[logging.StreamHandler(), logging.FileHandler("logs/stt_audio_processor.log")]
+)
 logger = logging.getLogger(__name__)
 
 class AudioHandler:
@@ -47,9 +58,9 @@ class AudioHandler:
             with mic as src:
                 logger.info("Calibrating microphone for ambient noise...")
                 await asyncio.to_thread(
-                self.recorder.adjust_for_ambient_noise,
-                src
-            )
+                    self.recorder.adjust_for_ambient_noise,
+                    src
+                )
             logger.info("Microphone calibrated.")
 
     
@@ -88,14 +99,9 @@ class AudioHandler:
             chunk = await self.data_queue.get()
             audio_chunks.append(chunk)
 
+        logger.info(f"Audio data chunks available: {len(audio_chunks)}")
         return b''.join(audio_chunks)
 
-    
-    async def audio_to_numpy(self, audio_data: bytes) -> np.ndarray:
-        '''Convert raw audio bytes to numpy array for whisper'''
-        return await asyncio.to_thread(
-            lambda: np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-        )
     
     async def clear_queue(self):
         """Clear the audio queue"""

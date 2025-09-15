@@ -1,4 +1,5 @@
 import io
+import os
 import wave
 import numpy as np
 from openai import OpenAI
@@ -6,6 +7,16 @@ from typing import Optional, Dict, Any
 import asyncio
 import logging
 
+# Ensure logs directory exists
+os.makedirs("logs", exist_ok=True)
+
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    # create the files with dir if not available
+    handlers=[logging.StreamHandler(), logging.FileHandler("logs/stt_audio_processor.log")]
+)
 logger = logging.getLogger(__name__)
 
 client = OpenAI()
@@ -16,6 +27,7 @@ async def transcribe_audio_by_openai(
     model: str = "gpt-4o-mini-transcribe"
 ) -> Optional[Dict[str, Any]]:
     """Convert numpy array to WAV in memory and send to OpenAI for transcription."""
+    logger.info("Transcribing audio...")
     try:
         # Convert float32 to int16 if needed
         if audio_np.dtype == np.float32:
@@ -41,10 +53,13 @@ async def transcribe_audio_by_openai(
                 language="en",
             )
             
-            return {
+            result = {
                 'text': transcription.text.strip() if transcription.text else None,
                 'confidence': getattr(transcription, 'confidence', 1.0)  # Not all models return confidence
             }
+
+            logger.info(f"Transcription result: {result}")
+            return result
             
     except Exception as e:
         logger.error(f"Transcription error: {e}")

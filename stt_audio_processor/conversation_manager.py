@@ -1,10 +1,21 @@
 import logging
 import numpy as np
+import os
 import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from .openai_transcription import transcribe_audio_by_openai
 
+# Ensure logs directory exists
+os.makedirs("logs", exist_ok=True)
+
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    # create the files with dir if not available
+    handlers=[logging.StreamHandler(), logging.FileHandler("logs/stt_audio_processor.log")]
+)
 logger = logging.getLogger(__name__)
 
 class ConversationManager:
