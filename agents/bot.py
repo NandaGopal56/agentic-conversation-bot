@@ -1,4 +1,7 @@
 import langchain
+import os
+import logging
+import asyncio
 
 from typing import Dict, Any, List, Union
 from dotenv import load_dotenv
@@ -8,10 +11,14 @@ from langgraph.checkpoint.memory import MemorySaver as CheckpointMemorySaver
 from langgraph.graph import START, END, MessagesState, StateGraph
 from langchain_openai import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
+from langchain.prompts import ChatPromptTemplate
+from logger import logger
 
 from storage import get_messages, save_message, delete_messages
 
 load_dotenv()
+
+
 
 # ------------------------------
 # State Definition
@@ -35,10 +42,10 @@ memory_saver = CheckpointMemorySaver()
 # ------------------------------
 # Nodes
 # ------------------------------
-def memory_state_update(state: State) -> Dict[str, List[AIMessage]]:
+async def memory_state_update(state: State) -> Dict[str, List[AIMessage]]:
     """Rebuild message history from storage and update state."""
 
-    thread_history: List[Dict[str, str]] = get_messages(state.get("thread_id"))
+    thread_history: List[Dict[str, str]] = await get_messages(state.get("thread_id"))
     last_human_message = state.get("messages")[-1]
 
     existing_messages = []
@@ -63,11 +70,11 @@ def memory_state_update(state: State) -> Dict[str, List[AIMessage]]:
         "messages": all_messages
     }
 
-from langchain.prompts import ChatPromptTemplate
 
-def call_model(state: dict) -> dict:
+
+async def call_model(state: dict) -> dict:
     """Build structured prompt with correct order and all context pieces."""
-    print(state)
+    logger.debug(state)
 
     messages = state.get("messages", [])
     current_message = None
@@ -140,28 +147,29 @@ def call_model(state: dict) -> dict:
         prompt_parts.append(("user", current_message))
 
     chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
+    formatted_messages = await chat_prompt.aformat_messages()
 
     # Debug
-    print("=== STATE DEBUG ===")
-    print(f"Summary exists: {bool(state.get('summary'))}")
-    print(f"Doc RAG exists: {bool(state.get('doc_rag_results'))}")
-    print(f"Web RAG exists: {bool(state.get('web_rag_results'))}")
-    print(f"Total messages count: {len(messages)}")
-    print(f"Current message extracted: {bool(current_message)}")
-    print(f"History messages count: {len(conversation_history)}")
-    print(f"Recent history count: {len(recent_history)}")
-    print(f"Total prompt parts: {len(prompt_parts)}")
-    print(f"Prompt: {chat_prompt.format_messages()}")
-    print("===================")
+    logger.debug("=== STATE DEBUG ===")
+    logger.debug(f"Summary exists: {bool(state.get('summary'))}")
+    logger.debug(f"Doc RAG exists: {bool(state.get('doc_rag_results'))}")
+    logger.debug(f"Web RAG exists: {bool(state.get('web_rag_results'))}")
+    logger.debug(f"Total messages count: {len(messages)}")
+    logger.debug(f"Current message extracted: {bool(current_message)}")
+    logger.debug(f"History messages count: {len(conversation_history)}")
+    logger.debug(f"Recent history count: {len(recent_history)}")
+    logger.debug(f"Total prompt parts: {len(prompt_parts)}")
+    logger.debug(f"Prompt: {formatted_messages}")
+    logger.debug("===================")
 
     # Call LLM
-    response = llm_chat_model.invoke(chat_prompt.format_messages())
+    response = await llm_chat_model.ainvoke(formatted_messages)
 
     return {"messages": [response]}
 
 
-def generate_embeddings_for_query(message: str) -> List[float]:
-    return embeddings_generator.embed_query(message)
+async def generate_embeddings_for_query(message: str) -> List[float]:
+    return await embeddings_generator.aembed_query(message)
 
 
 def should_continue(state: State) -> str:
@@ -196,7 +204,7 @@ def retrieve_data_from_web_RAG(state: State) -> Dict[str, Any]:
     return {"web_rag_results": retrieved_results}
 
 
-def summarize_conversation(state: State) -> Dict[str, Any]:
+async def summarize_conversation(state: State) -> Dict[str, Any]:
     """Summarize conversation into compact text."""
     summary = state.get("summary", "")
 
@@ -212,7 +220,7 @@ def summarize_conversation(state: State) -> Dict[str, Any]:
         summary_message = "Create a summary of the conversation below."
 
     messages = [SystemMessage(content=summary_message)] + state["messages"]
-    response = llm_chat_model.invoke(messages, config={
+    response = await llm_chat_model.ainvoke(messages, config={
         "metadata": {
             "thread_id": state.get("thread_id"),
             "source_application": "summarize_conversation"
@@ -224,8 +232,8 @@ def summarize_conversation(state: State) -> Dict[str, Any]:
     return {"summary": response.content, "messages": delete_messages}
 
 
-def save_state(state: State):
-    save_message(
+async def save_state(state: State):
+    await save_message(
         state.get("thread_id"),
         state["messages"][-2].content,
         state["messages"][-1].content,
@@ -263,21 +271,17 @@ def build() -> StateGraph:
 # ------------------------------
 def pretty_print_stream_chunk(chunk):
     for node, updates in chunk.items():
-        if "messages" in updates:
+        if "messages" in updates and node in ('memory_state_update', 'conversation'):
             updates["messages"][-1].pretty_print()
         else:
-            print("updates:", updates)
-        print("\n")
+            logger.debug("updates:", updates)
+        logger.debug("\n")
 
 
-# ------------------------------
-# Example Run
-# ------------------------------
-if __name__ == "__main__":
-
+async def main():
     thread_id = 1
 
-    delete_messages(thread_id)
+    await delete_messages(thread_id)
 
     graph = build()
 
@@ -290,8 +294,16 @@ if __name__ == "__main__":
     ]
 
     for message in messages:
-        for chunk in graph.stream(
+        async for chunk in graph.astream(
             {"messages": [message], "thread_id": thread_id},
             config={"configurable": {"thread_id": thread_id}}
         ):
             pretty_print_stream_chunk(chunk)
+
+
+# ------------------------------
+# Example Run
+# ------------------------------
+if __name__ == "__main__":
+
+    asyncio.run(main())
