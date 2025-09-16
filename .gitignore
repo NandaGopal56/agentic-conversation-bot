@@ -181,3 +181,7 @@ cython_debug/
 
 # sqlite database
 *.db
+
+logs/
+
+.DS_Store
