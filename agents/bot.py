@@ -13,6 +13,7 @@ from langchain_openai import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain.prompts import ChatPromptTemplate
 from logger import logger
+from langgraph.types import RunnableConfig
 
 from storage import get_messages, save_message, delete_messages
 
@@ -42,10 +43,12 @@ memory_saver = CheckpointMemorySaver()
 # ------------------------------
 # Nodes
 # ------------------------------
-async def memory_state_update(state: State) -> Dict[str, List[AIMessage]]:
+async def memory_state_update(state: State, config) -> Dict[str, List[AIMessage]]:
     """Rebuild message history from storage and update state."""
+    
+    thread_id = config['metadata']['thread_id']
 
-    thread_history: List[Dict[str, str]] = await get_messages(state.get("thread_id"))
+    thread_history: List[Dict[str, str]] = await get_messages(thread_id)
     last_human_message = state.get("messages")[-1]
 
     existing_messages = []
@@ -65,14 +68,16 @@ async def memory_state_update(state: State) -> Dict[str, List[AIMessage]]:
         + existing_messages \
         + [HumanMessage(content=last_human_message.content)]
 
+    # return all messages, summary and thread_id so these can be used by other nodes
     return {
         "summary": summary,
-        "messages": all_messages
+        "messages": all_messages,
+        "thread_id": thread_id
     }
 
 
 
-async def call_model(state: dict) -> dict:
+async def call_model(state: dict, config: RunnableConfig) -> dict:
     """Build structured prompt with correct order and all context pieces."""
     logger.debug(state)
 
@@ -163,8 +168,7 @@ async def call_model(state: dict) -> dict:
     logger.debug("===================")
 
     # Call LLM
-    response = await llm_chat_model.ainvoke(formatted_messages)
-
+    response = await llm_chat_model.ainvoke(formatted_messages, config=config)
     return {"messages": [response]}
 
 
@@ -286,19 +290,29 @@ async def main():
     graph = build()
 
     messages = [
-        "Hello",
-        "My name is Gopal",
-        "What is my name?",
-        "I like hiking on weekends and reading books",
-        "What are my hobbies?"
+        "write a 100 word essay on why AI is the future of technology",
     ]
 
     for message in messages:
-        async for chunk in graph.astream(
-            {"messages": [message], "thread_id": thread_id},
-            config={"configurable": {"thread_id": thread_id}}
-        ):
-            pretty_print_stream_chunk(chunk)
+
+        full_response = ""
+        buffer = ""
+        max_buffer_size = 100
+
+        async for message_chunk, metadata in graph.astream(
+                {'messages': [HumanMessage(content=message)]},
+                config= {'configurable': {'thread_id': thread_id}},
+                stream_mode= 'messages'
+            ):
+            if metadata.get('langgraph_node') == 'conversation':
+                chunk = message_chunk.content
+                buffer += chunk
+                full_response += chunk
+                if len(buffer) >= max_buffer_size:
+                    print(buffer)
+                    buffer = ""
+
+                
 
 
 # ------------------------------
