@@ -11,6 +11,7 @@ dependencies = [
     "langchain>=0.3.27",
     "langchain-openai>=0.3.33",
     "langgraph>=0.6.7",
+    "noisereduce>=3.0.3",
     "numpy>=2.2.6",
     "openai>=1.107.0",
     "openai-whisper>=20250625",

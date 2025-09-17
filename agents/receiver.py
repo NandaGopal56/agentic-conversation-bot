@@ -7,7 +7,7 @@ and manage conversations.
 from typing import Dict, Any
 import logging
 import asyncio
-from .text_writer import write_response_to_bus
+from .bot import invoke_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,7 @@ def on_voice_command(topic: str, payload: Dict[str, Any]) -> None:
     try:
         logger.info(f"Processing voice command on Topic: {topic}, Payload: {payload}")
 
-        # send the payload to the bus
-        asyncio.create_task(write_response_to_bus(payload))
+        asyncio.create_task(invoke_conversation(payload["sentences"][-1]["text"], thread_id=1))
     
     except Exception as e:
         logger.error(f"Error processing voice command: {e}", exc_info=True)

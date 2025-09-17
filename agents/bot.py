@@ -4,8 +4,9 @@ import asyncio
 from typing import Dict, Any, AsyncGenerator, Union
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
-from graph import build_workflow
-from storage import delete_messages, save_message
+from .graph import build_workflow
+from .storage import delete_messages, save_message
+from .text_writer import write_response_to_bus
 
 # Load environment and workflow
 load_dotenv()
@@ -93,9 +94,12 @@ async def invoke_conversation(
         # Handle conversation streaming chunks
         if node == "conversation":
             if status == "stream":
-                # Example: send chunk to TTS system
-                # await tts_service.speak(payload["response"])
-                pass
+                # send chunk to TTS system
+                payload = {
+                    "thread_id": thread_id,
+                    "llm_response": payload["response"]
+                }
+                await write_response_to_bus(payload)
 
             elif status == "complete":
                 ai_message = payload["response"]

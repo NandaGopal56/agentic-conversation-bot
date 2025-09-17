@@ -16,7 +16,7 @@ def on_llm_response(topic: str, payload: Dict[str, Any]) -> None:
     """Handle incoming LLM response and enqueue audio for playback."""
     try:
         logger.info(f"Processing LLM response: {payload}")
-        text = payload.get("text")
+        text = payload.get("llm_response")
         if not text:
             return
         segment = tts_generate_audio(text)

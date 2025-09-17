@@ -58,9 +58,9 @@ class InMemoryBus:
 
     async def publish(self, topic: str, payload: Dict[str, Any]):
         """Publish a message to a topic."""
-        logger.debug(f"Publishing to {topic}: {payload}")
+        print(f"Publishing to {topic}: {payload}")
         await self.queue.put((topic, payload))
-        logger.debug(f"Published to {topic}: {payload}")
+        print(f"Published to {topic}: {payload}")
 
     def subscribe(self, topic: str, callback: Callable[[str, Dict[str, Any]], Any]):
         """Subscribe a callback to a topic.

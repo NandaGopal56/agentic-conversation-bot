@@ -12,8 +12,8 @@ from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 
 
-from logger import logger
-from storage import get_messages, save_message, delete_messages
+from ..logger import logger
+from ..storage import get_messages, save_message, delete_messages
 from .state import State
 
 

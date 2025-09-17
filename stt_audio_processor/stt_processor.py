@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class AudioProcessorService:
+class STTAudioProcessorService:
     """Service to manage the voice assistant and its communication with the message bus."""
     
     def __init__(self):

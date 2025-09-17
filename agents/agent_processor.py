@@ -5,7 +5,7 @@ from .receiver import on_voice_command
 
 logger = logging.getLogger(__name__)
 
-class AgentService:
+class AgentProcessor:
     """Service for managing agent lifecycle and message handling."""
 
     def __init__(self):
@@ -32,7 +32,7 @@ class AgentService:
             self.bus.subscribe("voice/commands", on_voice_command)
 
             self._is_running = True
-            self._run_task = asyncio.create_task(self._run())
+            # self._run_task = asyncio.create_task(self._run())
             logger.info("Agent Service started")
 
         except Exception as e:

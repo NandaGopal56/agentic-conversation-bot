@@ -1,7 +1,7 @@
 import aiosqlite
 import asyncio
 from typing import List, Dict, Any
-from logger import logger
+from .logger import logger
 
 db_path = "./bot_data.db"
 

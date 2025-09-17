@@ -56,7 +56,7 @@ class VoiceProcessor:
             logger.info(f"Status: SLEEPING - Say '{wake_words}' to wake")
         
         conversation_event = await self.conversation_manager.get_conversation_event()
-        logger.info(conversation_event)
+        print(f'conversation_event: {conversation_event}')
 
         await self.bus.publish("voice/commands", conversation_event)
     

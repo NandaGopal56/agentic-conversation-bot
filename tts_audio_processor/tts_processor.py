@@ -5,7 +5,7 @@ from .text_reader import on_llm_response
 
 logger = logging.getLogger(__name__)
 
-class TTSService:
+class TTSAudioProcessorService:
     """Service for managing TTS lifecycle and message handling."""
 
     def __init__(self):
@@ -32,7 +32,7 @@ class TTSService:
             self.bus.subscribe("voice/commands/llm_response", on_llm_response)
 
             self._is_running = True
-            self._run_task = asyncio.create_task(self._run())
+            # self._run_task = asyncio.create_task(self._run())
             logger.info("TTS Service started")
 
         except Exception as e:
