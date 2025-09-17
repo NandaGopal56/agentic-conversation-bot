@@ -1,323 +1,132 @@
-import langchain
-import os
-import logging
+#!/usr/bin/env python3
+"""Conversation bot with streaming + final payload."""
 import asyncio
-
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, AsyncGenerator, Union
 from dotenv import load_dotenv
+from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
+from graph import build_workflow
+from storage import delete_messages, save_message
 
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, RemoveMessage
-from langgraph.checkpoint.memory import MemorySaver as CheckpointMemorySaver
-from langgraph.graph import START, END, MessagesState, StateGraph
-from langchain_openai import ChatOpenAI
-from langchain_openai.embeddings import OpenAIEmbeddings
-from langchain.prompts import ChatPromptTemplate
-from logger import logger
-from langgraph.types import RunnableConfig
-
-from storage import get_messages, save_message, delete_messages
-
+# Load environment and workflow
 load_dotenv()
+workflow = build_workflow()
 
 
+async def run_conversation(
+    message: str,
+    thread_id: int = 1,
+) -> AsyncGenerator[Dict[str, Union[str, bool]], None]:
+    """
+    Stream workflow results.
+    Yields dict payloads:
+        {"status": "stream", "chunk": "..."}   -> during streaming
+        {"status": "complete", "response": "..."} -> once finished
+    """
+    buffer = ""
+    max_buffer_size = 50
+    full_response = ""
 
-# ------------------------------
-# State Definition
-# ------------------------------
-class State(MessagesState):
-    """Extended state class"""
-    summary: str
-    thread_id: int
-    doc_rag_results: str = 'Document snippet: Gopal is a common Indian name.'
-    web_rag_results: str = 'Web search snippet: Gopal is a common Indian name.'
+    async for stream_mode, chunk in workflow.astream(
+        {"messages": [HumanMessage(content=message)]},
+        {"configurable": {"thread_id": thread_id}},
+        stream_mode=["messages", "updates"],
+    ):
 
+        # when stream_mode is messages, it means we are streaming the response
+        if stream_mode == "messages":
+            for msg in chunk:
+                if isinstance(msg, AIMessageChunk):
+                    buffer += msg.content
+                    full_response += msg.content
 
-# ------------------------------
-# Model Initialization
-# ------------------------------
-llm_chat_model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
-embeddings_generator = OpenAIEmbeddings(model="text-embedding-ada-002")
-memory_saver = CheckpointMemorySaver()
+                    # Stream buffer if it exceeds max size
+                    if len(buffer) >= max_buffer_size:
+                        response = {"status": "stream", "node": "conversation", "response": buffer}
+                        yield response
+                        buffer = ""
 
+        # when stream_mode is updates, it means we are yielding the updates from summarize_conversation and responding the summary to the user
+        elif stream_mode == "updates":
+            if chunk.get("summarize_conversation"):
+                if chunk.get("summarize_conversation").get("summary"):
+                    yield {
+                        "status": "update", 
+                        "node": "summarize_conversation", 
+                        "response": chunk.get("summarize_conversation").get("summary")
+                    }
 
-# ------------------------------
-# Nodes
-# ------------------------------
-async def memory_state_update(state: State, config) -> Dict[str, List[AIMessage]]:
-    """Rebuild message history from storage and update state."""
-    
-    thread_id = config['metadata']['thread_id']
+    # Stream any remaining buffer
+    if buffer:
+        response = {"status": "stream", "node": "conversation", "response": buffer}
+        yield response
 
-    thread_history: List[Dict[str, str]] = await get_messages(thread_id)
-    last_human_message = state.get("messages")[-1]
-
-    existing_messages = []
-    summary = ""
-
-    if thread_history:
-        for msg_pair in thread_history:
-            if msg_pair["user_message"]:
-                existing_messages.append(HumanMessage(content=msg_pair["user_message"]))
-            if msg_pair["ai_message"]:
-                existing_messages.append(AIMessage(content=msg_pair["ai_message"]))
-            if msg_pair["summary"]:
-                summary = msg_pair["summary"]
-
-    # Replace in-memory messages with DB messages + current human input
-    all_messages = [RemoveMessage(id=m.id) for m in state["messages"]] \
-        + existing_messages \
-        + [HumanMessage(content=last_human_message.content)]
-
-    # return all messages, summary and thread_id so these can be used by other nodes
-    return {
-        "summary": summary,
-        "messages": all_messages,
-        "thread_id": thread_id
+    # Final payload, stream the full response
+    response = {
+        "status": "complete", 
+        "node": "conversation", 
+        "response": full_response
     }
+    yield response
 
 
+async def invoke_conversation(
+    user_message: str,
+    thread_id: int = 1,
+) -> str:
+    """
+    Orchestrator function for external callers (API, CLI, etc.).
 
-async def call_model(state: dict, config: RunnableConfig) -> dict:
-    """Build structured prompt with correct order and all context pieces."""
-    logger.debug(state)
+    - Invokes the conversation graph via run_conversation
+    - Processes streaming responses (e.g., TTS or live feedback)
+    - Handles updates like summarization
+    - On completion, persists the conversation into DB
+    - Returns the final AI response as a string
+    """
+    ai_message: str = ""
+    summary: str = ""
 
-    messages = state.get("messages", [])
-    current_message = None
-    conversation_history = []
+    async for payload in run_conversation(user_message, thread_id):
 
-    if messages:
-        # Last human message is the current message
-        current_message = messages[-1].content if messages[-1].type == "human" else None
-        # All previous messages are conversation history
-        conversation_history = messages[:-1] if current_message else messages
+        node = payload["node"]
+        status = payload["status"]
+        
+        # Handle conversation streaming chunks
+        if node == "conversation":
+            if status == "stream":
+                # Example: send chunk to TTS system
+                # await tts_service.speak(payload["response"])
+                pass
 
-    # Recent history: last 2 exchanges
-    recent_history = conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
+            elif status == "complete":
+                ai_message = payload["response"]
 
-    # ----------------
-    # Build system context
-    # ----------------
-    context_parts = []
+        # Handle summarization or other updates
+        elif node == "summarize_conversation":
+            if status == "update":
+                summary = payload["response"]
 
-    base_instruction = (
-        "You are a helpful AI assistant. Answer all questions to the best of your ability. "
-        "Use the provided context information when relevant to answer the user's question. "
-        "If you are not aware of any information, explicitly say so instead of making things up. "
-        "Maintain a conversational and helpful tone throughout your responses."
-    )
-    context_parts.append(base_instruction)
+    if node == "conversation" and status == "complete":
+        # Persist conversation after completion
+        await save_message(thread_id, user_message, ai_message, summary)
 
-    if state.get("summary") and state["summary"].strip():
-        context_parts.append(
-            "=== CONVERSATION SUMMARY CONTEXT ===\n"
-            "The following is a summary of earlier parts of this conversation:\n"
-            f"{state['summary']}\n"
-            "=== END CONVERSATION SUMMARY ==="
-        )
-
-    if state.get("doc_rag_results") and state["doc_rag_results"].strip():
-        context_parts.append(
-            "=== DOCUMENT KNOWLEDGE CONTEXT ===\n"
-            "The following relevant information has been retrieved from documents:\n"
-            f"{state['doc_rag_results']}\n"
-            "=== END DOCUMENT CONTEXT ==="
-        )
-
-    if state.get("web_rag_results") and state["web_rag_results"].strip():
-        context_parts.append(
-            "=== WEB SEARCH CONTEXT ===\n"
-            "The following relevant information has been retrieved from web search:\n"
-            f"{state['web_rag_results']}\n"
-            "=== END WEB SEARCH CONTEXT ==="
-        )
-
-    if recent_history:
-        history_text = "=== RECENT CONVERSATION CONTEXT ===\n"
-        history_text += "The following shows the last 2 messages from your recent conversation:\n"
-        for msg in recent_history:
-            role = "User" if msg.type == "human" else "Assistant"
-            history_text += f"[{role}] {msg.content}\n"
-        history_text += "=== END RECENT CONVERSATION CONTEXT ==="
-        context_parts.append(history_text)
-
-    # Combine all context into ONE system message at the top
-    combined_context = "\n\n".join(context_parts)
-
-    # ----------------
-    # Build prompt
-    # ----------------
-    prompt_parts = [("system", combined_context)]
-
-    if current_message:
-        prompt_parts.append(("user", current_message))
-
-    chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
-    formatted_messages = await chat_prompt.aformat_messages()
-
-    # Debug
-    logger.debug("=== STATE DEBUG ===")
-    logger.debug(f"Summary exists: {bool(state.get('summary'))}")
-    logger.debug(f"Doc RAG exists: {bool(state.get('doc_rag_results'))}")
-    logger.debug(f"Web RAG exists: {bool(state.get('web_rag_results'))}")
-    logger.debug(f"Total messages count: {len(messages)}")
-    logger.debug(f"Current message extracted: {bool(current_message)}")
-    logger.debug(f"History messages count: {len(conversation_history)}")
-    logger.debug(f"Recent history count: {len(recent_history)}")
-    logger.debug(f"Total prompt parts: {len(prompt_parts)}")
-    logger.debug(f"Prompt: {formatted_messages}")
-    logger.debug("===================")
-
-    # Call LLM
-    response = await llm_chat_model.ainvoke(formatted_messages, config=config)
-    return {"messages": [response]}
-
-
-async def generate_embeddings_for_query(message: str) -> List[float]:
-    return await embeddings_generator.aembed_query(message)
-
-
-def should_continue(state: State) -> str:
-    """Decide whether to summarize conversation or end."""
-    return "summarize_conversation" if len(state["messages"]) > 2 else "save_state"
-
-
-def branch_selection_for_RAG(state: State) -> Union[str, List[str]]:
-    """Decide which RAG branches to run."""
-    doc_enabled = state.get("is_doc_rag_enabled", False)
-    web_enabled = state.get("is_search_enabled", False)
-
-    if doc_enabled and web_enabled:
-        return ["doc_rag_search", "web_rag_search"]
-    if doc_enabled:
-        return "doc_rag_search"
-    if web_enabled:
-        return "web_rag_search"
-    return "conversation"
-
-
-def retrieve_data_from_doc_RAG(state: State) -> Dict[str, Any]:
-    """Placeholder for doc RAG retrieval."""
-    results = []  # TODO: implement
-    retrieved_docs = '\n'.join(item['data'] for item in results)
-    return {"doc_rag_results": retrieved_docs}
-
-
-def retrieve_data_from_web_RAG(state: State) -> Dict[str, Any]:
-    """Placeholder for web RAG retrieval."""
-    retrieved_results = []  # TODO: implement
-    return {"web_rag_results": retrieved_results}
-
-
-async def summarize_conversation(state: State) -> Dict[str, Any]:
-    """Summarize conversation into compact text."""
-    summary = state.get("summary", "")
-
-    if summary:
-        summary_message = (
-            f"This is the summary of the conversation so far: {summary}\n\n"
-            "Extend the summary to include the new messages."
-            "Do not end or add any questions or open-ended prompts."
-            "Be concise and do not add any additional information."
-            "End only with the summary and no additional text."
-        )
-    else:
-        summary_message = "Create a summary of the conversation below."
-
-    messages = [SystemMessage(content=summary_message)] + state["messages"]
-    response = await llm_chat_model.ainvoke(messages, config={
-        "metadata": {
-            "thread_id": state.get("thread_id"),
-            "source_application": "summarize_conversation"
-        }
-    })
-
-    delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-2]]
-
-    return {"summary": response.content, "messages": delete_messages}
-
-
-async def save_state(state: State):
-    await save_message(
-        state.get("thread_id"),
-        state["messages"][-2].content,
-        state["messages"][-1].content,
-        state.get("summary", "")
-    )
-
-    return state
-
-# ------------------------------
-# Workflow Builder
-# ------------------------------
-def build() -> StateGraph:
-    workflow = StateGraph(State)
-
-    workflow.add_node("memory_state_update", memory_state_update)
-    workflow.add_node("doc_rag_search", retrieve_data_from_doc_RAG)
-    workflow.add_node("web_rag_search", retrieve_data_from_web_RAG)
-    workflow.add_node("conversation", call_model)
-    workflow.add_node("summarize_conversation", summarize_conversation)
-    workflow.add_node("save_state", save_state)
-
-    workflow.add_edge(START, "memory_state_update")
-    workflow.add_conditional_edges("memory_state_update", branch_selection_for_RAG)
-    workflow.add_edge("doc_rag_search", "conversation")
-    workflow.add_edge("web_rag_search", "conversation")
-    workflow.add_conditional_edges("conversation", should_continue)
-    workflow.add_edge("summarize_conversation", "save_state")
-    workflow.add_edge("save_state", END)
-
-    return workflow.compile(checkpointer=memory_saver)
-
-
-# ------------------------------
-# Streaming Debug Utility
-# ------------------------------
-def pretty_print_stream_chunk(chunk):
-    for node, updates in chunk.items():
-        if "messages" in updates and node in ('memory_state_update', 'conversation'):
-            updates["messages"][-1].pretty_print()
-        else:
-            logger.debug("updates:", updates)
-        logger.debug("\n")
-
+    return ai_message
 
 async def main():
-    thread_id = 1
-
+    """Example CLI runner for testing the orchestrator."""
+    thread_id = 11
     await delete_messages(thread_id)
 
-    graph = build()
-
     messages = [
-        "write a 100 word essay on why AI is the future of technology",
+        "Hello, how are you?",
+        "Which model are you using?",
+        "Do you know my name?",
     ]
 
-    for message in messages:
-
-        full_response = ""
-        buffer = ""
-        max_buffer_size = 100
-
-        async for message_chunk, metadata in graph.astream(
-                {'messages': [HumanMessage(content=message)]},
-                config= {'configurable': {'thread_id': thread_id}},
-                stream_mode= 'messages'
-            ):
-            if metadata.get('langgraph_node') == 'conversation':
-                chunk = message_chunk.content
-                buffer += chunk
-                full_response += chunk
-                if len(buffer) >= max_buffer_size:
-                    print(buffer)
-                    buffer = ""
-
-                
+    for user_message in messages:
+        print(f"\nUser: {user_message}")
+        response = await invoke_conversation(user_message, thread_id)
+        print(f"AI: {response}")
 
 
-# ------------------------------
-# Example Run
-# ------------------------------
 if __name__ == "__main__":
-
     asyncio.run(main())

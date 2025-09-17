@@ -32,7 +32,7 @@ async def get_messages(thread_id: int) -> List[Dict[str, Any]]:
     return messages
 
 async def save_message(thread_id: int, user_message: str, ai_message: str, summary: str):
-    logger.debug(f"Saving message for thread ID: {thread_id}")
+    logger.debug(f"Saving message for thread ID: {thread_id}, User Message: {user_message}, AI Message: {ai_message}, Summary: {summary}")
     async with aiosqlite.connect(db_path) as db:
         await db.execute("INSERT INTO messages (thread_id, user_message, ai_message, summary) VALUES (?, ?, ?, ?)", (thread_id, user_message, ai_message, summary))
         await db.commit()
