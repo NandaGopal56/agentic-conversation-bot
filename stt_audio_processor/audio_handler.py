@@ -6,7 +6,7 @@ import speech_recognition as sr
 from typing import Optional
 from sys import platform
 from .config import AUDIO_CONFIG, SYSTEM_CONFIG
-
+import numpy as np
 
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
@@ -22,7 +22,18 @@ logger = logging.getLogger(__name__)
 class AudioHandler:
     '''Handles audio recording and preprocessing'''
     
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(AudioHandler, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self):
+        if self._initialized:
+            return
+            
         self.recorder = sr.Recognizer()
         self.recorder.energy_threshold = AUDIO_CONFIG.energy_threshold
         self.recorder.dynamic_energy_threshold = AUDIO_CONFIG.dynamic_energy_threshold
@@ -30,9 +41,8 @@ class AudioHandler:
         
         self.data_queue = asyncio.Queue()
         self.loop = None   # will hold the main asyncio loop
-
-        # schedule calibration in background
-        asyncio.create_task(self._calibrate_microphone())
+        self._calibrated = False
+        self._initialized = True
 
     def _get_microphone(self) -> sr.Microphone:
         '''Return a new microphone instance based on platform config'''
@@ -50,8 +60,11 @@ class AudioHandler:
                         )
         return sr.Microphone(sample_rate=AUDIO_CONFIG.sample_rate)
 
-    async def _calibrate_microphone(self):
+    async def calibrate_microphone(self):
         '''Calibrate microphone for ambient noise'''
+        if self._calibrated:
+            return
+            
         mic = self._get_microphone()
         if mic:
             with mic as src:
@@ -61,20 +74,25 @@ class AudioHandler:
                     src
                 )
             logger.info("Microphone calibrated.")
+            self._calibrated = True
 
+    def set_tts_audio(self, audio_bytes: bytes):
+        """Provide TTS audio for echo suppression"""
+        self.last_tts_audio = np.frombuffer(audio_bytes, dtype=np.int16)
     
-    def _record_callback(self, _, audio: sr.AudioData) -> None:
-        """Callback function for background recording (sync)."""
+    def _record_callback(self, _, audio: sr.AudioData):
+        """Process audio and push into async queue"""
         try:
-            data = audio.get_raw_data()
-            # Schedule coroutine to push into async queue
-            asyncio.run_coroutine_threadsafe(self.data_queue.put(data), self.loop)
+            mic_data = np.frombuffer(audio.get_raw_data(), dtype=np.int16)
+            asyncio.run_coroutine_threadsafe(self.data_queue.put(mic_data.tobytes()), self.loop)
         except Exception as e:
-            logger.error(f"Error in callback: {e}")
+            print(f"Error in callback: {e}")
 
 
     async def start_listening(self):
         """Start background listening (async)."""
+        await self.calibrate_microphone()  # Auto-calibrate if not done
+        
         self.loop = asyncio.get_running_loop()
 
         def _start_listening():
@@ -106,3 +124,10 @@ class AudioHandler:
         """Clear the audio queue"""
         while not self.data_queue.empty():
             await self.data_queue.get()
+
+
+# Create singleton instance and export
+audio_handler = AudioHandler()
+
+# Export the singleton instance  
+__all__ = ['audio_handler', 'AudioHandler']

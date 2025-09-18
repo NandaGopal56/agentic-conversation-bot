@@ -8,7 +8,7 @@ from typing import Optional
 
 from langchain_core.callbacks import file
 
-from .audio_handler import AudioHandler
+from .audio_handler import AudioHandler, audio_handler
 from .wake_word_detector import WakeWordDetector
 from .conversation_manager import ConversationManager
 from .config import AUDIO_CONFIG
@@ -33,7 +33,7 @@ class VoiceProcessor:
     
     def __init__(self, bus: InMemoryBus):
         self.bus = bus
-        self.audio_handler = AudioHandler()
+        self.audio_handler = audio_handler
         self.wake_word_detector = WakeWordDetector()
         self.conversation_manager = ConversationManager()
         

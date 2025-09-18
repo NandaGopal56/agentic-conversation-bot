@@ -1,13 +1,7 @@
 import threading
 import queue
-import asyncio
-from io import BytesIO
 import simpleaudio as sa
 from pydub import AudioSegment
-# from stt_audio_processor.audio_handler import audio_handler_obj
-from pydub import AudioSegment
-import numpy as np
-
 
 # Shared queue
 audio_queue: "queue.Queue[AudioSegment]" = queue.Queue()
@@ -21,12 +15,6 @@ def playback_worker():
     while not stop_playback.is_set():
         try:
             segment = audio_queue.get(timeout=0.5)
-
-            # Convert AudioSegment to raw PCM int16
-            # tts_pcm = segment.set_channels(1).set_frame_rate(16000).get_array_of_samples()
-            # tts_bytes = np.array(tts_pcm, dtype=np.int16).tobytes()
-            # asyncio.run_coroutine_threadsafe(audio_handler_obj.set_tts_audio(tts_bytes), audio_handler_obj.loop)
-
         except queue.Empty:
             continue
 
