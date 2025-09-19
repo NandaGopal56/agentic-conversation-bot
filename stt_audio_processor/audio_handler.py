@@ -7,6 +7,7 @@ from typing import Optional
 from sys import platform
 from .config import AUDIO_CONFIG, SYSTEM_CONFIG
 import numpy as np
+import threading
 
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
@@ -33,7 +34,10 @@ class AudioHandler:
     def __init__(self):
         if self._initialized:
             return
-            
+        
+        self._stop_listening = None
+        self._listening_lock = threading.Lock()
+        self.muted = False
         self.recorder = sr.Recognizer()
         self.recorder.energy_threshold = AUDIO_CONFIG.energy_threshold
         self.recorder.dynamic_energy_threshold = AUDIO_CONFIG.dynamic_energy_threshold
@@ -76,48 +80,95 @@ class AudioHandler:
             logger.info("Microphone calibrated.")
             self._calibrated = True
 
+    def mute(self):
+        """Stop the background listener so _record_callback will not be called."""
+        with self._listening_lock:
+            if self._stop_listening is None:
+                # already muted / not listening
+                self.muted = True
+                logger.debug("Mute requested but listener already stopped")
+                return
+            try:
+                # some listen_in_background stop functions accept a kwarg, some don't
+                self._stop_listening(wait_for_stop=False)
+            except TypeError:
+                try:
+                    self._stop_listening()
+                except Exception:
+                    pass
+            self._stop_listening = None
+            self.muted = True
+            logger.info("Microphone listener stopped (muted)")
+
+    def unmute(self):
+        """Restart background listener."""
+        with self._listening_lock:
+            if self._stop_listening is not None:
+                self.muted = False
+                logger.debug("Unmute requested but already listening")
+                return
+            mic = self._get_microphone()
+            if mic is None:
+                raise RuntimeError("No microphone available to unmute")
+            self._stop_listening = self.recorder.listen_in_background(
+                mic,
+                self._record_callback,
+                phrase_time_limit=self.max_record_time,
+            )
+            self.muted = False
+            logger.info("Microphone listener restarted (unmuted)")
+
     def set_tts_audio(self, audio_bytes: bytes):
         """Provide TTS audio for echo suppression"""
         self.last_tts_audio = np.frombuffer(audio_bytes, dtype=np.int16)
     
     def _record_callback(self, _, audio: sr.AudioData):
-        """Process audio and push into async queue"""
+        """Process audio and push into queue"""
         try:
+            if self.muted:
+                logger.info("Microphone muted: dropping audio frame")
+                return
+            logger.info("Microphone unmuted: processing audio frame")
+
             mic_data = np.frombuffer(audio.get_raw_data(), dtype=np.int16)
-            asyncio.run_coroutine_threadsafe(self.data_queue.put(mic_data.tobytes()), self.loop)
+            self.data_queue.put_nowait(mic_data.tobytes())   # works fine from any thread
         except Exception as e:
-            print(f"Error in callback: {e}")
+            logger.error(f"Error in callback: {e}")
 
 
     async def start_listening(self):
-        """Start background listening (async)."""
-        await self.calibrate_microphone()  # Auto-calibrate if not done
-        
-        self.loop = asyncio.get_running_loop()
+        """Start background listening (always safe to call)."""
+        await self.calibrate_microphone()
 
-        def _start_listening():
-            mic = self._get_microphone()  # new mic just for listening
-            return self.recorder.listen_in_background(
-                mic,
-                self._record_callback,
-                phrase_time_limit=self.max_record_time,
-            )
+        def _start():
+            with self._listening_lock:
+                if self._stop_listening is not None:
+                    return  # already listening
+                mic = self._get_microphone()
+                if mic is None:
+                    raise RuntimeError("No microphone available")
+                self._stop_listening = self.recorder.listen_in_background(
+                    mic,
+                    self._record_callback,
+                    phrase_time_limit=self.max_record_time,
+                )
+                self.muted = False
+                logger.info("Background listening started")
 
-        return await asyncio.to_thread(_start_listening)
+        await asyncio.to_thread(_start)
 
     
     async def get_audio_data(self) -> Optional[bytes]:
-        '''Get accumulated audio data from async queue'''
-        if self.data_queue.empty():
-            return None
+        """Async: drain audio queue into one bytes object"""
+        def _drain():
+            if self.data_queue.empty():
+                return None
+            chunks = []
+            while not self.data_queue.empty():
+                chunks.append(self.data_queue.get_nowait())
+            return b''.join(chunks)
 
-        audio_chunks = []
-        while not self.data_queue.empty():
-            chunk = await self.data_queue.get()
-            audio_chunks.append(chunk)
-
-        logger.info(f"Audio data chunks available: {len(audio_chunks)}")
-        return b''.join(audio_chunks)
+        return await asyncio.to_thread(_drain)
 
     
     async def clear_queue(self):

@@ -2,6 +2,7 @@ import threading
 import queue
 import simpleaudio as sa
 from pydub import AudioSegment
+from stt_audio_processor.audio_handler import audio_handler
 
 # Shared queue
 audio_queue: "queue.Queue[AudioSegment]" = queue.Queue()
@@ -17,7 +18,11 @@ def playback_worker():
             segment = audio_queue.get(timeout=0.5)
         except queue.Empty:
             continue
+        
+        # Mute the audio handler while playing TTS audio
+        audio_handler.mute()
 
+        # Play the TTS audio
         play_obj = sa.play_buffer(
             segment.raw_data,
             num_channels=segment.channels,
@@ -25,6 +30,9 @@ def playback_worker():
             sample_rate=segment.frame_rate,
         )
         play_obj.wait_done()
+
+        # Unmute the audio handler after playing TTS audio
+        audio_handler.unmute()
         audio_queue.task_done()
 
 
