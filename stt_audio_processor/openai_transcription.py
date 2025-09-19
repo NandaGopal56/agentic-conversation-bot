@@ -5,18 +5,7 @@ import numpy as np
 from openai import OpenAI
 from typing import Optional, Dict, Any
 import asyncio
-import logging
-
-# Ensure logs directory exists
-os.makedirs("logs", exist_ok=True)
-
-log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, log_level),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("logs/stt_audio_processor.log")]
-)
-logger = logging.getLogger(__name__)
+from .logger import logger
 
 client = OpenAI()
 

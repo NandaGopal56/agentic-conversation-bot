@@ -1,21 +1,9 @@
 '''Wake word detection functionality - ASYNC VERSION'''
 
-import logging
-import os
 from datetime import datetime, timedelta
 from typing import List, Optional
 from .config import WAKE_WORD_CONFIG
-
-# Ensure logs directory exists
-os.makedirs("logs", exist_ok=True)
-
-log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, log_level),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("logs/stt_audio_processor.log")]
-)
-logger = logging.getLogger(__name__)
+from .logger import logger
 
 class WakeWordDetector:
     '''Handles wake word detection and activation state'''

@@ -5,11 +5,9 @@ This module contains the core agent implementations that process voice commands
 and manage conversations.
 """
 from typing import Dict, Any
-import logging
 from .tts_service import tts_generate_audio
 from .audio_player import audio_queue
-
-logger = logging.getLogger(__name__)
+from .logger import logger
 
 
 def on_llm_response(topic: str, payload: Dict[str, Any]) -> None:

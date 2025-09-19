@@ -1,11 +1,6 @@
 import asyncio
-import json
-import logging
 from typing import Dict, Any, Callable, List, Optional
-from datetime import datetime
-
-# Configure logging
-logger = logging.getLogger(__name__)
+from .logger import logger
 
 class InMemoryBus:
     """

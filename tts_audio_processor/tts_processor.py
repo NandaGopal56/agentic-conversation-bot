@@ -1,9 +1,7 @@
 import asyncio
-import logging
 from communication_bus.inmemory_bus import InMemoryBus, bus
 from .text_reader import on_llm_response
-
-logger = logging.getLogger(__name__)
+from .logger import logger
 
 class TTSAudioProcessorService:
     """Service for managing TTS lifecycle and message handling."""

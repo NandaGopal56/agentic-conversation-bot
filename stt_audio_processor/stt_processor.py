@@ -1,20 +1,8 @@
 import asyncio
-import logging
-import os
 from typing import Optional
 from communication_bus.inmemory_bus import bus, InMemoryBus
 from .voice_assistant import VoiceProcessor
-
-# Ensure logs directory exists
-os.makedirs("logs", exist_ok=True)
-
-log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, log_level),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("logs/stt_audio_processor.log")]
-)
-logger = logging.getLogger(__name__)
+from .logger import logger
 
 class STTAudioProcessorService:
     """Service to manage the voice assistant and its communication with the message bus."""

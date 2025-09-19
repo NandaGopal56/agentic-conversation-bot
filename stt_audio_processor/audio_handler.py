@@ -1,6 +1,4 @@
 '''Audio recording and processing functionality'''
-import logging
-import os
 import asyncio
 import speech_recognition as sr
 from typing import Optional
@@ -8,17 +6,8 @@ from sys import platform
 from .config import AUDIO_CONFIG, SYSTEM_CONFIG
 import numpy as np
 import threading
+from .logger import logger
 
-# Ensure logs directory exists
-os.makedirs("logs", exist_ok=True)
-
-log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, log_level),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("logs/stt_audio_processor.log")]
-)
-logger = logging.getLogger(__name__)
 
 class AudioHandler:
     '''Handles audio recording and preprocessing'''

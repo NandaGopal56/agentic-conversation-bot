@@ -1,31 +1,14 @@
 '''Main voice assistant coordinator'''
-
-import logging
-import os
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
 
-from langchain_core.callbacks import file
-
-from .audio_handler import AudioHandler, audio_handler
+from .audio_handler import audio_handler
 from .wake_word_detector import WakeWordDetector
 from .conversation_manager import ConversationManager
 from .config import AUDIO_CONFIG
-
+from .logger import logger
 from communication_bus.inmemory_bus import InMemoryBus
-
-
-# Ensure logs directory exists
-os.makedirs("logs", exist_ok=True)
-
-log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, log_level),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("logs/stt_audio_processor.log")]
-)
-logger = logging.getLogger(__name__)
 
 
 class VoiceProcessor:
