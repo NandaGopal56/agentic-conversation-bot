@@ -1,5 +1,4 @@
 import io
-import os
 import wave
 import numpy as np
 from openai import OpenAI
@@ -32,6 +31,9 @@ async def transcribe_audio_by_openai(
             # Reset buffer position to the beginning
             wav_buffer.seek(0)
             
+            # BUG: Transcription is not happening strictly in the same language as spoken nor even in english with language or prompt explicitly specified
+            # TODO: Fix this
+            
             # Send to OpenAI
             transcription = await asyncio.to_thread(
                 client.audio.transcriptions.create,
@@ -39,6 +41,7 @@ async def transcribe_audio_by_openai(
                 file=("audio.wav", wav_buffer, "audio/wav"),
                 response_format="json",
                 language="en",
+                prompt="You are a helpful assistant for transcribing audio. No matter what the audio is, you will always transcribe it to English. DO NOT transcribe it to any other language. Make sure to transcribe it to English. If you are not sure, transcribe it to English always.",
             )
             
             result = {

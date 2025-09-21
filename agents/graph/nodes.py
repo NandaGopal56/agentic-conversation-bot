@@ -69,46 +69,52 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
     # Recent history: last 2 exchanges
     recent_history = conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
 
-    # Build system context
     context_parts = [
-        "You are a helpful AI assistant. Answer all questions to the best of your ability. "
-        "Use the provided context information when relevant to answer the user's question. "
-        "If you are not aware of any information, explicitly say so instead of making things up. "
-        "Maintain a conversational and helpful tone throughout your responses."
+        """You are a helpful AI assistant designed to behave like a voice assistant (e.g., Alexa or Google Assistant).
+        Always answer clearly, concisely, and in a natural conversational style.
+        Prioritize providing direct, useful information without unnecessary elaboration.
+        If you don’t know the answer, say so plainly instead of inventing information.
+        Follow user instructions carefully and avoid going off-topic.
+        For multi-step or complex tasks, break responses into simple, actionable steps.
+        Stay polite, neutral, and professional at all times.
+        Do not include opinions, speculation, or personal experiences.
+        Do not generate disallowed, unsafe, or harmful content.
+        Avoid overly long answers unless explicitly requested.
+        When clarification is needed, ask a short and direct follow-up question."""
     ]
 
     if state.get("summary") and state["summary"].strip():
         context_parts.append(
-            "=== CONVERSATION SUMMARY CONTEXT ===\n"
-            "The following is a summary of earlier parts of this conversation:\n"
-            f"{state['summary']}\n"
-            "=== END CONVERSATION SUMMARY ==="
-        )
+            f"""=== CONVERSATION SUMMARY CONTEXT ===
+            The following is a summary of earlier parts of this conversation:
+            {state['summary']}
+            === END CONVERSATION SUMMARY ===""")
 
     if state.get("doc_rag_results") and state["doc_rag_results"].strip():
         context_parts.append(
-            "=== DOCUMENT KNOWLEDGE CONTEXT ===\n"
-            "The following relevant information has been retrieved from documents:\n"
-            f"{state['doc_rag_results']}\n"
-            "=== END DOCUMENT CONTEXT ==="
-        )
+            f"""=== DOCUMENT KNOWLEDGE CONTEXT ===
+            The following relevant information has been retrieved from documents:
+            {state['doc_rag_results']}
+            === END DOCUMENT CONTEXT ===""")
 
     if state.get("web_rag_results") and state["web_rag_results"].strip():
         context_parts.append(
-            "=== WEB SEARCH CONTEXT ===\n"
-            "The following relevant information has been retrieved from web search:\n"
-            f"{state['web_rag_results']}\n"
-            "=== END WEB SEARCH CONTEXT ==="
-        )
+            f"""=== WEB SEARCH CONTEXT ===
+            The following relevant information has been retrieved from web search:
+            {state['web_rag_results']}
+            === END WEB SEARCH CONTEXT ===""")
 
     if recent_history:
-        history_text = "=== RECENT CONVERSATION CONTEXT ===\n"
-        history_text += "The following shows the last 2 messages from your recent conversation:\n"
+        history_lines = [
+            "=== RECENT CONVERSATION CONTEXT ===",
+            "The following shows the last 2 messages from your recent conversation:",
+        ]
         for msg in recent_history:
             role = "User" if msg.type == "human" else "Assistant"
-            history_text += f"[{role}] {msg.content}\n"
-        history_text += "=== END RECENT CONVERSATION CONTEXT ==="
-        context_parts.append(history_text)
+            history_lines.append(f"[{role}] {msg.content}")
+
+        history_lines.append("=== END RECENT CONVERSATION CONTEXT ===")
+        context_parts.append("\n".join(history_lines))
 
     # Combine all context into ONE system message at the top
     combined_context = "\n\n".join(context_parts)

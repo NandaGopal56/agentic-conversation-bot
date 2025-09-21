@@ -18,7 +18,7 @@ def playback_worker():
     logger.info('Starting playback worker')
 
     while not stop_playback.is_set():
-        logger.info('Waiting for audio to play')
+        logger.debug('Waiting for audio to play')
         try:
             segment = audio_queue.get(timeout=0.5)
         except queue.Empty:
