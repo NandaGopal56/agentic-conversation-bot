@@ -40,9 +40,23 @@ async def run_conversation(
                     buffer += msg.content
                     full_response += msg.content
 
-                    # Stream buffer if it exceeds max size
-                    if len(buffer) >= max_buffer_size:
-                        response = {"status": "stream", "node": "conversation", "response": buffer}
+                    # Check for punctuation to yield earlier
+                    if any(p in buffer for p in [".", "!", "?", ","]):
+                        response = {
+                            "status": "stream",
+                            "node": "conversation",
+                            "response": buffer.strip()
+                        }
+                        yield response
+                        buffer = ""
+
+                    # Safety net: still flush if buffer gets too big
+                    elif len(buffer) >= max_buffer_size:
+                        response = {
+                            "status": "stream",
+                            "node": "conversation",
+                            "response": buffer.strip()
+                        }
                         yield response
                         buffer = ""
 

@@ -13,13 +13,6 @@ class AgentProcessor:
         self._is_running = False
         self._run_task: asyncio.Task | None = None
 
-    async def _run(self):
-        """Main agent loop (extend later for AI processing)."""
-        while self._is_running:
-            await asyncio.sleep(0.5)  # placeholder loop
-            # could add periodic work here if needed
-        logger.info("Agent loop stopped")
-
     async def start(self, **kwargs) -> None:
         """Start the agent service asynchronously."""
         if self._is_running:
@@ -32,7 +25,6 @@ class AgentProcessor:
             self.bus.subscribe("voice/commands", on_voice_command)
 
             self._is_running = True
-            # self._run_task = asyncio.create_task(self._run())
             logger.info("Agent Service started")
 
         except Exception as e:
