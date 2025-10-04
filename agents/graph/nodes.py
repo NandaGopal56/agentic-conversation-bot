@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 tools = basic_tools
 tool_node = ToolNode(tools=tools)
 
-llm_chat_model = ChatOpenAI(model="gpt-4o-mini-2024-07-18").bind_tools(tools)
+llm_chat_model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+llm_chat_model_with_tools = llm_chat_model.bind_tools(tools)
 embeddings_generator = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 
@@ -37,6 +38,7 @@ def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
         print("Tool calls found")
         result = tool_node.invoke(state, config)
         print(result)
+        return {"tool_calls": result}
     else:
         print("No tool calls found")
         return state
@@ -72,7 +74,7 @@ async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str,
 
 async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Process conversation through the language model with context."""
-    logger.debug(state)
+    print(f'state: {state}')
     messages = state.get("messages", [])
     current_message = None
     conversation_history = []
@@ -119,28 +121,26 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
             {state['web_rag_results']}
             === END WEB SEARCH CONTEXT ===""")
 
-    if recent_history:
-        history_lines = [
-            "=== RECENT CONVERSATION CONTEXT ===",
-            "The following shows the last 2 messages from your recent conversation:",
-        ]
-        for msg in recent_history:
-            role = "User" if msg.type == "human" else "Assistant"
-            history_lines.append(f"[{role}] {msg.content}")
-
-        history_lines.append("=== END RECENT CONVERSATION CONTEXT ===")
-        context_parts.append("\n".join(history_lines))
 
     # Combine all context into ONE system message at the top
     combined_context = "\n\n".join(context_parts)
     
     # Build prompt
-    prompt_parts = [("system", combined_context)]
+    prompt_parts = [{"role": "system", "content": combined_context}]
+
+    
+    for msg in recent_history:
+        if msg.type == "human":
+            prompt_parts.append(msg)
+        if msg.type == "ai":
+            prompt_parts.append(msg)
+            if msg.tool_calls:
+                prompt_parts.append(state['tool_calls']['messages'][0])
+
     if current_message:
-        prompt_parts.append(("user", current_message))
+        prompt_parts.append({"role": "user", "content": current_message})
 
     chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
-    print(chat_prompt)
     formatted_messages = await chat_prompt.aformat_messages()
 
     # Debug logging
@@ -156,8 +156,8 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
     logger.debug("===================")
 
     # Call LLM
-    response = await llm_chat_model.ainvoke(formatted_messages, config=config)
-    print(response)
+    response = await llm_chat_model_with_tools.ainvoke(formatted_messages, config=config)
+    print(f'LLM response: {response}')
     return {"messages": [response]}
 
 async def generate_embeddings_for_query(message: str) -> List[float]:

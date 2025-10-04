@@ -141,9 +141,9 @@ async def main():
         # "Hello, how are you?",
         # "Which model are you using?",
         # "Do you know my name?",
-        # "Hello",
-        # "how r u?",
-        "What is the weather like in New York?"
+        "Hello",
+        "how r u?",
+        "What is the weather like in New York? "
     ]
 
     for user_message in messages:

@@ -34,7 +34,6 @@ def get_current_weather(location: str) -> Dict:
     """
     data = fetch_weather_data(location).get("current", {})
     data = '38 degrees celsius'
-    print(f"fetch_weather_data for location: {location}, data: {data}")
     return json.dumps(data)
 
 
