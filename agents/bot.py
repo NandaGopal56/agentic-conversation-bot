@@ -1,16 +1,19 @@
-#!/usr/bin/env python3
-"""Conversation bot with streaming + final payload."""
 import asyncio
-from typing import Dict, Any, AsyncGenerator, Union
+from typing import Dict, AsyncGenerator, Union
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
+from langchain_core.messages import HumanMessage, AIMessageChunk
 from .graph import build_workflow
 from .storage import delete_messages, save_message
 from .text_writer import write_response_to_bus
 
-# Load environment and workflow
+# Load environment
 load_dotenv()
+
+# Build workflow
 workflow = build_workflow()
+
+with open("workflow_graph.png", "wb") as f:
+    f.write(workflow.get_graph().draw_mermaid_png())
 
 
 async def run_conversation(
@@ -135,9 +138,12 @@ async def main():
     await delete_messages(thread_id)
 
     messages = [
-        "Hello, how are you?",
-        "Which model are you using?",
-        "Do you know my name?",
+        # "Hello, how are you?",
+        # "Which model are you using?",
+        # "Do you know my name?",
+        # "Hello",
+        # "how r u?",
+        "What is the weather like in New York?"
     ]
 
     for user_message in messages:

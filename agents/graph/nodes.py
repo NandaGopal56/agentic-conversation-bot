@@ -10,21 +10,36 @@ from langgraph.types import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
-
-
+from langgraph.prebuilt import ToolNode
 from ..logger import logger
 from ..storage import get_messages, save_message, delete_messages
 from .state import State
-
+from ..tools.basic_tools import basic_tools
 
 load_dotenv()
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+# define the final list of tools
+tools = basic_tools
+tool_node = ToolNode(tools=tools)
 
-llm_chat_model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+llm_chat_model = ChatOpenAI(model="gpt-4o-mini-2024-07-18").bind_tools(tools)
 embeddings_generator = OpenAIEmbeddings(model="text-embedding-ada-002")
+
+
+def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
+    """Process tool node."""
+    messages = state["messages"]
+    last_message = messages[-1]
+    if last_message.tool_calls:
+        print("Tool calls found")
+        result = tool_node.invoke(state, config)
+        print(result)
+    else:
+        print("No tool calls found")
+        return state
 
 async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Rebuild message history from storage and update state."""
@@ -125,6 +140,7 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
         prompt_parts.append(("user", current_message))
 
     chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
+    print(chat_prompt)
     formatted_messages = await chat_prompt.aformat_messages()
 
     # Debug logging
@@ -141,15 +157,22 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
 
     # Call LLM
     response = await llm_chat_model.ainvoke(formatted_messages, config=config)
+    print(response)
     return {"messages": [response]}
 
 async def generate_embeddings_for_query(message: str) -> List[float]:
     """Generate embeddings for the given query text."""
     return await embeddings_generator.aembed_query(message)
 
-def should_continue(state: State) -> str:
+def path_selector_post_llm_call(state: State) -> str:
     """Decide whether to summarize conversation or end."""
+    messages = state["messages"]
+    last_message = messages[-1]
+    if last_message.tool_calls:
+        return "tools_execution"
+
     return "summarize_conversation" if len(state["messages"]) > 2 else "workflow_completion"
+
 
 def branch_selection_for_RAG(state: State) -> Union[str, List[str]]:
     """Decide which RAG branches to run based on state."""

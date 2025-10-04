@@ -5,6 +5,7 @@ Builds and configures the state graph with all nodes and edges.
 from typing import Dict, Any
 from langgraph.graph import START, END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver as CheckpointMemorySaver
+from langgraph.prebuilt import tools_condition
 from .state import State
 
 from .nodes import (
@@ -13,9 +14,10 @@ from .nodes import (
     branch_selection_for_RAG,
     retrieve_data_from_doc_RAG,
     retrieve_data_from_web_RAG,
-    should_continue,
     summarize_conversation,
-    workflow_completion
+    workflow_completion,
+    tool_node_processor,
+    path_selector_post_llm_call
 )
 
 def build_workflow() -> StateGraph:
@@ -34,6 +36,7 @@ def build_workflow() -> StateGraph:
     workflow.add_node("conversation", call_model)
     workflow.add_node("summarize_conversation", summarize_conversation)
     workflow.add_node("workflow_completion", workflow_completion)
+    workflow.add_node("tools_execution", tool_node_processor)
     
     # Define the workflow edges
     workflow.add_edge(START, "memory_state_update")
@@ -54,13 +57,16 @@ def build_workflow() -> StateGraph:
     # Add conditional edges after conversation
     workflow.add_conditional_edges(
         source="conversation",
-        path=should_continue,
+        path=path_selector_post_llm_call,
         path_map={
+            "tools_execution": "tools_execution",
             "summarize_conversation": "summarize_conversation",
             "workflow_completion": "workflow_completion"
         }
     )
-    
+
+    workflow.add_edge("tools_execution", "conversation")
+
     # Connect the rest of the workflow
     workflow.add_edge("summarize_conversation", "workflow_completion")
     workflow.add_edge("workflow_completion", END)
