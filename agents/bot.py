@@ -143,7 +143,7 @@ async def main():
         # "Do you know my name?",
         "Hello",
         "how r u?",
-        "What is the weather like in New York? "
+        "What is the weather like in New York? and time in New York?"
     ]
 
     for user_message in messages:

@@ -136,6 +136,7 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
             prompt_parts.append(msg)
             if msg.tool_calls:
                 prompt_parts.append(state['tool_calls']['messages'][0])
+                prompt_parts.append(state['tool_calls']['messages'][1])
 
     if current_message:
         prompt_parts.append({"role": "user", "content": current_message})
