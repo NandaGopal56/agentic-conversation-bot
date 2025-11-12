@@ -3,7 +3,7 @@ from typing import Dict, AsyncGenerator, Union
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessageChunk
 from .graph import build_workflow
-from .storage import delete_messages, save_message
+# from .storage import delete_messages, save_message
 from .text_writer import write_response_to_bus
 
 # Load environment
@@ -47,7 +47,7 @@ async def run_conversation(
                     if any(p in buffer for p in [".", "!", "?", ","]):
                         response = {
                             "status": "stream",
-                            "node": "conversation",
+                            "node": "call_model",
                             "response": buffer.strip()
                         }
                         yield response
@@ -57,7 +57,7 @@ async def run_conversation(
                     elif len(buffer) >= max_buffer_size:
                         response = {
                             "status": "stream",
-                            "node": "conversation",
+                            "node": "call_model",
                             "response": buffer.strip()
                         }
                         yield response
@@ -75,13 +75,13 @@ async def run_conversation(
 
     # Stream any remaining buffer
     if buffer:
-        response = {"status": "stream", "node": "conversation", "response": buffer}
+        response = {"status": "stream", "node": "call_model", "response": buffer}
         yield response
 
     # Final payload, stream the full response
     response = {
         "status": "complete", 
-        "node": "conversation", 
+        "node": "call_model", 
         "response": full_response
     }
     yield response
@@ -94,10 +94,10 @@ async def invoke_conversation(
     """
     Orchestrator function for external callers (API, CLI, etc.).
 
-    - Invokes the conversation graph via run_conversation
+    - Invokes the call_model graph via run_conversation
     - Processes streaming responses (e.g., TTS or live feedback)
     - Handles updates like summarization
-    - On completion, persists the conversation into DB
+    - On completion, persists the call_model into DB
     - Returns the final AI response as a string
     """
     ai_message: str = ""
@@ -108,15 +108,15 @@ async def invoke_conversation(
         node = payload["node"]
         status = payload["status"]
         
-        # Handle conversation streaming chunks
-        if node == "conversation":
+        # Handle call_model streaming chunks
+        if node == "call_model":
             if status == "stream":
                 # send chunk to TTS system
                 payload = {
                     "thread_id": thread_id,
                     "llm_response": payload["response"]
                 }
-                await write_response_to_bus(payload)
+                # await write_response_to_bus(payload)
 
             elif status == "complete":
                 ai_message = payload["response"]
@@ -126,21 +126,22 @@ async def invoke_conversation(
             if status == "update":
                 summary = payload["response"]
 
-    if node == "conversation" and status == "complete":
-        # Persist conversation after completion
-        await save_message(thread_id, user_message, ai_message, summary)
+    if node == "call_model" and status == "complete":
+        # Persist call_model after completion
+        # await save_message(thread_id, user_message, ai_message, summary)
+        pass
 
     return ai_message
 
 async def main():
     """Example CLI runner for testing the orchestrator."""
     thread_id = 11
-    await delete_messages(thread_id)
+    # await delete_messages(thread_id)
 
     messages = [
-        # "Hello, how are you?",
-        # "Which model are you using?",
-        # "Do you know my name?",
+        "Hello, how are you?",
+        "Which model are you using?",
+        "Do you know my name?",
         "Hello",
         "how r u?",
         "What is the weather like in New York? and time in New York?"

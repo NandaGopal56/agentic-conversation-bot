@@ -4,7 +4,7 @@ Each function represents a node in the graph.
 """
 import logging
 from typing import Dict, Any, List, Optional, Union
-from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage
+from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage, ToolMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate
 from langgraph.types import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -12,7 +12,7 @@ from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from langgraph.prebuilt import ToolNode
 from ..logger import logger
-from ..storage import get_messages, save_message, delete_messages
+# from ..storage import get_messages, save_message, delete_messages
 from .state import State
 from ..tools.basic_tools import basic_tools
 
@@ -42,25 +42,14 @@ def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
 
     if tool_calls:
         print("Tool calls found")
-        result = tool_node.invoke(state, config)
+        result = tool_node.invoke(tool_calls, config)
         print(result)
 
-        # Identify the user message ID to attach step metadata
-        user_message_id = last_message.id
-        metadata = state.get("metadata", {})
-        message_metadata = metadata.get(user_message_id, {"steps": []})
-
-        # Append step info safely
-        message_metadata["steps"].append({
-            "id": f"step-tool-{len(message_metadata['steps']) + 1}",
-            "type": "tool_call",
-            "tool_calls": result
-        })
-
-        metadata[user_message_id] = message_metadata
-
+        # Add tool messages to the messages list
+        tool_messages = result.get("messages", [])
+        
         return {
-            "metadata": metadata
+            "messages": tool_messages
         }
     else:
         print("No tool calls found")
@@ -69,68 +58,57 @@ def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
 
 async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Rebuild message history from storage and update state."""
-    thread_id = config.get("metadata", {}).get("thread_id")
-    thread_history: list[dict[str, str]] = await get_messages(thread_id)
-    messages = state.get("messages", [])
-    last_human_message = messages[-1] if messages else None
 
-    existing_messages = []
+    # print("Memory state update")
+    # print('State at memory state update: ', state)
+    # print('-' * 50)
 
-    if thread_history:
-        for msg_pair in thread_history:
-            user_msg = msg_pair.get("user_message")
-            ai_msg = msg_pair.get("ai_message")
+    # thread_id = config.get("metadata", {}).get("thread_id")
+    # thread_history: list[dict[str, str]] = await get_messages(thread_id)
+    # messages = state.get("messages", [])
+    # last_human_message = messages[-1] if messages else None
 
-            if user_msg:
-                existing_messages.append(HumanMessage(content=user_msg))
-            if ai_msg:
-                existing_messages.append(AIMessage(content=ai_msg))
+    # existing_messages = []
 
-    # Rebuild message list: clear current messages, add old ones, then the latest human message
-    all_messages = [RemoveMessage(id=m.id) for m in messages] + existing_messages
-    if last_human_message:
-        all_messages.append(HumanMessage(content=last_human_message.content))
+    # if thread_history:
+    #     for msg_pair in thread_history:
+    #         user_msg = msg_pair.get("user_message")
+    #         ai_msg = msg_pair.get("ai_message")
 
-    # Preserve metadata structure
-    metadata = state.get("metadata", {})
-    last_user_id = last_human_message.id if last_human_message and hasattr(last_human_message, "id") else None
-    if last_user_id and last_user_id not in metadata:
-        metadata[last_user_id] = {"steps": [], "assistant_message": None}
+    #         if user_msg:
+    #             existing_messages.append(HumanMessage(content=user_msg))
+    #         if ai_msg:
+    #             existing_messages.append(AIMessage(content=ai_msg))
 
-    return {
-        "messages": all_messages,
-        "metadata": metadata,
-        "thread_id": thread_id,
-    }
+    # # Rebuild message list: clear current messages, add old ones, then the latest human message
+    # all_messages = [RemoveMessage(id=m.id) for m in messages] + existing_messages
+    # if last_human_message:
+    #     all_messages.append(HumanMessage(content=last_human_message.content))
+
+
+    # return {
+    #     "messages": all_messages,
+    #     "thread_id": thread_id,
+    # }
+    return state
 
 
 async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Process conversation through the language model with context."""
-    print(f"state: {state}")
+    print("Call model")
+    print('State at call model: ', state)
+    print('-' * 50)
 
     messages = state.get("messages", [])
-    metadata = state.get("metadata", {})
     summary = state.get("summary", "")
 
-    current_message = None
-    conversation_history = []
-
-    if messages:
-        last_msg = messages[-1]
-        if isinstance(last_msg, HumanMessage):
-            current_message = last_msg.content
-            conversation_history = messages[:-1]
-        else:
-            conversation_history = messages
-
-    recent_history = conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
+    prompt_parts = []
 
     # Build system context
-    context_parts = [
-        """You are a helpful AI assistant designed to behave like a voice assistant (e.g., Alexa or Google Assistant).
+    system_prompt = SystemMessage("""You are a helpful AI assistant designed to behave like a voice assistant (e.g., Alexa or Google Assistant).
         Always answer clearly, concisely, and in a natural conversational style.
         Prioritize providing direct, useful information without unnecessary elaboration.
-        If you don’t know the answer, say so plainly instead of inventing information.
+        If you don't know the answer, say so plainly instead of inventing information.
         Follow user instructions carefully and avoid going off-topic.
         For multi-step or complex tasks, break responses into simple, actionable steps.
         Stay polite, neutral, and professional at all times.
@@ -138,65 +116,62 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
         Do not generate disallowed, unsafe, or harmful content.
         Avoid overly long answers unless explicitly requested.
         When clarification is needed, ask a short and direct follow-up question."""
-    ]
+    )
+    prompt_parts.append(system_prompt)
 
-    if summary and summary.strip():
-        context_parts.append(
-            f"""=== CONVERSATION SUMMARY CONTEXT ===
-            {summary}
-            === END SUMMARY ==="""
-        )
+    # if summary is available, add it to the system prompt
+    if summary:
+        rag_prompt = SystemMessage(f"""Here is the summary of the conversation so far: {summary}""")
+        prompt_parts.append(rag_prompt)
 
-    combined_context = "\n\n".join(context_parts)
-    prompt_parts = [{"role": "system", "content": combined_context}]
 
-    # Build conversation prompt
-    for msg in recent_history or []:
-        if isinstance(msg, HumanMessage):
-            prompt_parts.append({"role": "user", "content": msg.content})
-        elif isinstance(msg, AIMessage):
-            prompt_parts.append({"role": "assistant", "content": msg.content})
+    # extract last human message & the index of the last human message
+    last_human_message = None
+    last_human_message_index = None
 
-            msg_id = msg.id
-            msg_meta = metadata.get(msg_id, {}) if msg_id else {}
-            steps = msg_meta.get("steps", [])
+    for i, message in enumerate(messages):
+        if isinstance(message, HumanMessage):
+            last_human_message = message
+            last_human_message_index = i
 
-            for step in steps or []:
-                step_type = step.type
-                if step_type == "rag":
-                    rag_results = step.rag_results
-                    prompt_parts.append({
-                        "role": "system",
-                        "content": f"RAG Results: {rag_results}"
-                    })
-                elif step_type == "tool_call":
-                    tool_calls = step.tool_calls
-                    prompt_parts.append({
-                        "role": "system",
-                        "content": f"Tool Calls: {tool_calls}"
-                    })
-                elif step_type == "llm_response":
-                    output = step.output
-                    if output:
-                        prompt_parts.append({
-                            "role": "assistant",
-                            "content": output
-                        })
+    print(f"Last human message index: {last_human_message_index}")
+    print(f"Last human message content: {last_human_message.content}")
 
-    if current_message:
-        prompt_parts.append({"role": "user", "content": current_message})
 
-    chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
-    formatted_messages = await chat_prompt.aformat_messages()
 
-    # Debug info
-    logger.debug("=== STATE DEBUG ===")
-    logger.debug(f"Messages count: {len(messages)}")
-    logger.debug(f"Recent history count: {len(recent_history)}")
-    logger.debug(f"Metadata keys: {list(metadata.keys())}")
-    logger.debug("===================")
+    # Add last conversation history
+    MAX_HISTORY_LENGTH = 2
+    COUNT = 0
+    recent_history = []
 
-    response = await llm_chat_model_with_tools.ainvoke(formatted_messages, config=config)
+    # extract anything before last human_human_message_index till max_history_length considering the only the human messages will be covered when calculating the MAX_HISTORY_LENGTH
+    for index, message in reversed(list(enumerate(messages[:last_human_message_index]))):
+        
+        if isinstance(message, HumanMessage):
+            recent_history.append(message)
+            COUNT += 1
+            if COUNT == MAX_HISTORY_LENGTH:
+                break
+        else:
+            recent_history.append(message)
+
+    recent_history = reversed(recent_history)
+    prompt_parts.extend(recent_history)
+
+
+
+    # After adding the recent history, add the last human message and any flowwing messages like AI message containing tool calls or tool messages etc as well
+    current_conversation = messages[last_human_message_index:]
+    prompt_parts.extend(current_conversation)
+
+    # format the prompt parts into a chat prompt
+    # chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
+    # print(f"Prompt parts: {prompt_parts}")
+
+    print(prompt_parts)
+               
+    # invoke the LLM with the chat prompt
+    response = await llm_chat_model_with_tools.ainvoke(prompt_parts, config=config)
     print(f"LLM response: {response}")
 
     return {"messages": [response]}
@@ -209,16 +184,26 @@ async def generate_embeddings_for_query(message: str) -> List[float]:
 
 
 def path_selector_post_llm_call(state: State) -> str:
-    """Decide whether to summarize conversation or end."""
+    """Decide which path to take after LLM call."""
     messages = state.get("messages", [])
+
+    # fail-safe, if no messages, end the workflow
     if not messages:
         return "workflow_completion"
 
+    # get the last message
     last_message = messages[-1]
-    if getattr(last_message, "tool_calls", None):
+    
+    # if last message is AI message and tool calls are available, execute tools
+    if isinstance(last_message, AIMessage) and getattr(last_message, "tool_calls", None):
         return "tools_execution"
 
-    return "summarize_conversation" if len(messages) > 2 else "workflow_completion"
+    # if len(messages) is more than 2, summarize conversation
+    if len(messages) > 2:
+        return "summarize_conversation"
+
+    # else end the workflow
+    return "workflow_completion"
 
 
 def branch_selection_for_RAG(state: State) -> Union[str, List[str]]:
@@ -232,7 +217,7 @@ def branch_selection_for_RAG(state: State) -> Union[str, List[str]]:
         return "doc_rag_search"
     if web_enabled:
         return "web_rag_search"
-    return "conversation"
+    return "call_model"
 
 
 def retrieve_data_from_doc_RAG(state: State) -> Dict[str, Any]:
