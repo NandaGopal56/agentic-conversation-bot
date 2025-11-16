@@ -3,6 +3,7 @@ Node definitions for the conversation graph.
 Each function represents a node in the graph.
 """
 import logging
+import stat
 from typing import Dict, Any, List, Optional, Union
 from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage, ToolMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate
@@ -34,16 +35,16 @@ def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Process tool node safely with metadata tracking."""
     messages = state.get("messages", [])
     if not messages:
-        print("No messages found in state")
+        # print("No messages found in state")
         return state
 
     last_message = messages[-1]
     tool_calls = getattr(last_message, "tool_calls", None)
 
     if tool_calls:
-        print("Tool calls found")
+        # print("Tool calls found")
         result = tool_node.invoke(tool_calls, config)
-        print(result)
+        # print(result)
 
         # Add tool messages to the messages list
         tool_messages = result.get("messages", [])
@@ -52,7 +53,7 @@ def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
             "messages": tool_messages
         }
     else:
-        print("No tool calls found")
+        # print("No tool calls found")
         return state
 
 
@@ -95,17 +96,15 @@ async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str,
 
 async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Process conversation through the language model with context."""
-    print("Call model")
-    print('State at call model: ', state)
-    print('-' * 50)
-
+    
     messages = state.get("messages", [])
     summary = state.get("summary", "")
 
     prompt_parts = []
 
     # Build system context
-    system_prompt = SystemMessage("""You are a helpful AI assistant designed to behave like a voice assistant (e.g., Alexa or Google Assistant).
+    system_prompt = SystemMessage("""
+        You are a helpful AI assistant designed to behave like a voice assistant (e.g., Alexa or Google Assistant).
         Always answer clearly, concisely, and in a natural conversational style.
         Prioritize providing direct, useful information without unnecessary elaboration.
         If you don't know the answer, say so plainly instead of inventing information.
@@ -134,10 +133,8 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
             last_human_message = message
             last_human_message_index = i
 
-    print(f"Last human message index: {last_human_message_index}")
-    print(f"Last human message content: {last_human_message.content}")
-
-
+    # print(f"Last human message index: {last_human_message_index}")
+    # print(f"Last human message content: {last_human_message.content}")
 
     # Add last conversation history
     MAX_HISTORY_LENGTH = 2
@@ -165,14 +162,12 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
     prompt_parts.extend(current_conversation)
 
     # format the prompt parts into a chat prompt
-    # chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
-    # print(f"Prompt parts: {prompt_parts}")
-
-    print(prompt_parts)
+    chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
+    print(f"Chat prompt: {chat_prompt.format()}")
                
     # invoke the LLM with the chat prompt
-    response = await llm_chat_model_with_tools.ainvoke(prompt_parts, config=config)
-    print(f"LLM response: {response}")
+    response = await llm_chat_model_with_tools.ainvoke(chat_prompt.messages, config=config)
+    print(f"LLM response: {response.content if response.content else response.tool_calls}")
 
     return {"messages": [response]}
 
@@ -213,24 +208,24 @@ def branch_selection_for_RAG(state: State) -> Union[str, List[str]]:
 
     if doc_enabled and web_enabled:
         return ["doc_rag_search", "web_rag_search"]
+
     if doc_enabled:
         return "doc_rag_search"
+
     if web_enabled:
         return "web_rag_search"
+
     return "call_model"
 
 
 def retrieve_data_from_doc_RAG(state: State) -> Dict[str, Any]:
     """Placeholder for document RAG retrieval."""
-    results = state.get("metadata", {}).get("doc_rag_results", [])
-    retrieved_docs = '\n'.join(item.get("data", "") for item in results)
-    return {"doc_rag_results": retrieved_docs}
+    pass
 
 
 def retrieve_data_from_web_RAG(state: State) -> Dict[str, Any]:
     """Placeholder for web RAG retrieval."""
-    retrieved_results = state.get("metadata", {}).get("web_rag_results", [])
-    return {"web_rag_results": retrieved_results}
+    pass
 
 
 async def summarize_conversation(state: State) -> Dict[str, Any]:
@@ -249,20 +244,20 @@ async def summarize_conversation(state: State) -> Dict[str, Any]:
     else:
         summary_message = "Create a summary of the conversation below."
 
-    chat_messages = [{"role": "system", "content": summary_message}] + [
+    chat_messages = [
+        {"role": "system", "content": summary_message}] + [
         {"role": "user" if getattr(m, "type", "") == "human" else "assistant", "content": getattr(m, "content", "")}
         for m in messages
     ]
 
-    response = await llm_chat_model.ainvoke(
-        chat_messages,
-        config={
-            "metadata": {
-                "thread_id": state.get("thread_id", ""),
-                "source_application": "summarize_conversation"
-            }
+    config = RunnableConfig(
+        metadata={
+            "thread_id": state.get("thread_id", ""),
+            "source_application": "summarize_conversation"
         }
     )
+
+    response = await llm_chat_model.ainvoke(chat_messages, config=config)
 
     delete_messages = [
         RemoveMessage(id=getattr(m, "id", "")) for m in messages[:-2]
@@ -273,4 +268,4 @@ async def summarize_conversation(state: State) -> Dict[str, Any]:
 
 async def workflow_completion(state: State) -> Dict[str, Any]:
     """Workflow completion node."""
-    return {"messages": state.get("messages", [])}
+    return state
