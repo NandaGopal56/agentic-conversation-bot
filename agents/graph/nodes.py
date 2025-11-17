@@ -6,14 +6,14 @@ import logging
 import stat
 from typing import Dict, Any, List, Optional, Union
 from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage, ToolMessage, SystemMessage
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts.chat import ChatPromptTemplate
 from langgraph.types import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from langgraph.prebuilt import ToolNode
 from ..logger import logger
-# from ..storage import get_messages, save_message, delete_messages
+from ..storage import add_message, add_tool_call, add_tool_result
 from .state import State
 from ..tools.basic_tools import basic_tools
 
@@ -31,7 +31,7 @@ llm_chat_model_with_tools = llm_chat_model.bind_tools(tools)
 embeddings_generator = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 
-def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
+async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Process tool node safely with metadata tracking."""
     messages = state.get("messages", [])
     if not messages:
@@ -48,6 +48,12 @@ def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
 
         # Add tool messages to the messages list
         tool_messages = result.get("messages", [])
+
+        await add_tool_result(
+            user_message_id=last_message.id,
+            ai_message_id=last_message.id,
+            output_data=[tc.dict() for tc in tool_messages]
+        )
         
         return {
             "messages": tool_messages
@@ -59,6 +65,13 @@ def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
 
 async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Rebuild message history from storage and update state."""
+
+    await add_message(
+        thread_id=config.get("configurable", {}).get("thread_id"), 
+        role="user", 
+        message_type="text", 
+        content=state.get("messages", [])[-1].content
+    )
 
     # print("Memory state update")
     # print('State at memory state update: ', state)
@@ -178,7 +191,7 @@ async def generate_embeddings_for_query(message: str) -> List[float]:
     return await embeddings_generator.aembed_query(message)
 
 
-def path_selector_post_llm_call(state: State) -> str:
+async def path_selector_post_llm_call(state: State, config: RunnableConfig) -> str:
     """Decide which path to take after LLM call."""
     messages = state.get("messages", [])
 
@@ -188,9 +201,22 @@ def path_selector_post_llm_call(state: State) -> str:
 
     # get the last message
     last_message = messages[-1]
+
+    message_id = await add_message(
+        thread_id=config.get("configurable", {}).get("thread_id"), 
+        role="assistant", 
+        message_type="text", 
+        content=last_message.content
+    )
     
     # if last message is AI message and tool calls are available, execute tools
     if isinstance(last_message, AIMessage) and getattr(last_message, "tool_calls", None):
+        await add_tool_call(
+            user_message_id=message_id,
+            ai_message_id=message_id,
+            input_data=last_message.tool_calls
+        )
+
         return "tools_execution"
 
     # if len(messages) is more than 2, summarize conversation

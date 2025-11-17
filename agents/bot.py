@@ -12,8 +12,8 @@ load_dotenv()
 # Build workflow
 workflow = build_workflow()
 
-with open("workflow_graph.png", "wb") as f:
-    f.write(workflow.get_graph().draw_mermaid_png())
+# with open("workflow_graph.png", "wb") as f:
+#     f.write(workflow.get_graph().draw_mermaid_png())
 
 
 async def run_conversation(
@@ -139,12 +139,13 @@ async def main():
     # await delete_messages(thread_id)
 
     messages = [
-        "Hello, how are you?",
-        "Which model are you using?",
-        "Do you know my name?",
-        "Hello",
-        "how r u?",
-        "What is the weather like in New York? and time in New York?"
+        # "Hello, how are you?",
+        # "Which model are you using?",
+        # "Do you know my name?",
+        # "Hello",
+        # "how r u?",
+        # "What is the weather like in New York? and time in New York?"
+        "Find restaurants near MG Road Bangalore."
     ]
 
     for user_message in messages:

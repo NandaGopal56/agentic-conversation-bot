@@ -52,4 +52,77 @@ def get_wind_details(location: str) -> Dict:
         "gust_kph": current.get("gust_kph")
     }
 
-basic_tools = [get_location_details, get_current_weather, get_wind_details]
+
+@tool
+def geocode_address(address: str) -> dict:
+    """
+    Convert a physical address into GPS coordinates.
+    Supported cities:
+      - Bangalore
+      - Delhi
+      - Mumbai
+    Output:
+      - latitude: float
+      - longitude: float
+    """
+
+    address_lower = address.lower()
+
+    if "bangalore" in address_lower:
+        return {"latitude": 12.9716, "longitude": 77.5946}
+
+    if "delhi" in address_lower:
+        return {"latitude": 28.6139, "longitude": 77.2090}
+
+    if "mumbai" in address_lower:
+        return {"latitude": 19.0760, "longitude": 72.8777}
+
+    # fallback (forces LLM to handle unknown city gracefully)
+    return {"latitude": 0.0, "longitude": 0.0}
+
+@tool
+def fetch_nearby_restaurants(latitude: float, longitude: float) -> dict:
+    """
+    Return nearby restaurants based on given coordinates.
+    Mock conditional logic for:
+      - Bangalore
+      - Delhi
+      - Mumbai
+    Output:
+      - restaurants: list[str]
+    """
+
+    # Bangalore
+    if abs(latitude - 12.9716) < 0.01 and abs(longitude - 77.5946) < 0.01:
+        return {
+            "restaurants": [
+                "Empire Restaurant",
+                "Truffles Koramangala",
+                "Toit Indiranagar"
+            ]
+        }
+
+    # Delhi
+    if abs(latitude - 28.6139) < 0.01 and abs(longitude - 77.2090) < 0.01:
+        return {
+            "restaurants": [
+                "Karim’s Jama Masjid",
+                "Sita Ram Diwan Chand",
+                "Bukhara ITC Maurya"
+            ]
+        }
+
+    # Mumbai
+    if abs(latitude - 19.0760) < 0.01 and abs(longitude - 72.8777) < 0.01:
+        return {
+            "restaurants": [
+                "Leopold Cafe",
+                "Shree Thaker Bhojanalay",
+                "Bademiya Colaba"
+            ]
+        }
+
+    # fallback
+    return {"restaurants": []}
+
+basic_tools = [get_location_details, get_current_weather, get_wind_details, geocode_address, fetch_nearby_restaurants]
