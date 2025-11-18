@@ -176,11 +176,11 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
 
     # format the prompt parts into a chat prompt
     chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
-    print(f"Chat prompt: {chat_prompt.format()}")
+    # print(f"Chat prompt: {chat_prompt.format()}")
                
     # invoke the LLM with the chat prompt
     response = await llm_chat_model_with_tools.ainvoke(chat_prompt.messages, config=config)
-    print(f"LLM response: {response.content if response.content else response.tool_calls}")
+    # print(f"LLM response: {response.content if response.content else response.tool_calls}")
 
     return {"messages": [response]}
 
@@ -285,11 +285,7 @@ async def summarize_conversation(state: State) -> Dict[str, Any]:
 
     response = await llm_chat_model.ainvoke(chat_messages, config=config)
 
-    delete_messages = [
-        RemoveMessage(id=getattr(m, "id", "")) for m in messages[:-2]
-    ] if len(messages) > 2 else []
-
-    return {"summary": getattr(response, "content", ""), "messages": delete_messages}
+    return {"summary": getattr(response, "content", "")}
 
 
 async def workflow_completion(state: State) -> Dict[str, Any]:
