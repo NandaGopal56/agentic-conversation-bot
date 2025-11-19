@@ -108,7 +108,7 @@ async def add_message(thread_id: int, role: str, message_type: str,
     """
     async with aiosqlite.connect(DB_PATH) as db:
         seq = await _get_next_sequence(db, thread_id)
-        print(thread_id, role, message_type, content, metadata, seq)
+        # print(thread_id, role, message_type, content, metadata, seq)
         cur = await db.execute("""
             INSERT INTO messages (thread_id, role, message_type, content, metadata, sequence)
             VALUES (?, ?, ?, ?, ?, ?)

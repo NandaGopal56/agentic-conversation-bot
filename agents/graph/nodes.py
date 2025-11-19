@@ -13,7 +13,7 @@ from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from langgraph.prebuilt import ToolNode
 from ..logger import logger
-from ..storage import add_message, add_tool_call, add_tool_result
+# from ..storage import add_message, add_tool_call, add_tool_result
 from .state import State
 from ..tools.basic_tools import basic_tools
 
@@ -49,11 +49,11 @@ async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str,
         # Add tool messages to the messages list
         tool_messages = result.get("messages", [])
 
-        await add_tool_result(
-            user_message_id=last_message.id,
-            ai_message_id=last_message.id,
-            output_data=[tc.dict() for tc in tool_messages]
-        )
+        # await add_tool_result(
+        #     user_message_id=last_message.id,
+        #     ai_message_id=last_message.id,
+        #     output_data=[tc.dict() for tc in tool_messages]
+        # )
         
         return {
             "messages": tool_messages
@@ -66,12 +66,12 @@ async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str,
 async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Rebuild message history from storage and update state."""
 
-    await add_message(
-        thread_id=config.get("configurable", {}).get("thread_id"), 
-        role="user", 
-        message_type="text", 
-        content=state.get("messages", [])[-1].content
-    )
+    # await add_message(
+    #     thread_id=config.get("configurable", {}).get("thread_id"), 
+    #     role="user", 
+    #     message_type="text", 
+    #     content=state.get("messages", [])[-1].content
+    # )
 
     # print("Memory state update")
     # print('State at memory state update: ', state)
@@ -202,20 +202,20 @@ async def path_selector_post_llm_call(state: State, config: RunnableConfig) -> s
     # get the last message
     last_message = messages[-1]
 
-    message_id = await add_message(
-        thread_id=config.get("configurable", {}).get("thread_id"), 
-        role="assistant", 
-        message_type="text", 
-        content=last_message.content
-    )
+    # message_id = await add_message(
+    #     thread_id=config.get("configurable", {}).get("thread_id"), 
+    #     role="assistant", 
+    #     message_type="text", 
+    #     content=last_message.content
+    # )
     
     # if last message is AI message and tool calls are available, execute tools
     if isinstance(last_message, AIMessage) and getattr(last_message, "tool_calls", None):
-        await add_tool_call(
-            user_message_id=message_id,
-            ai_message_id=message_id,
-            input_data=last_message.tool_calls
-        )
+        # await add_tool_call(
+        #     user_message_id=message_id,
+        #     ai_message_id=message_id,
+        #     input_data=last_message.tool_calls
+        # )
 
         return "tools_execution"
 
