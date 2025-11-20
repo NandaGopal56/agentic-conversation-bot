@@ -4,76 +4,126 @@ Each function represents a node in the graph.
 """
 import logging
 from typing import Dict, Any, List, Optional, Union
-from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage, ToolMessage, SystemMessage
+from langchain_core.prompts.chat import ChatPromptTemplate
 from langgraph.types import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
-
-
+from langgraph.prebuilt import ToolNode
+from langgraph.config import get_stream_writer
 from ..logger import logger
-from ..storage import get_messages, save_message, delete_messages
 from .state import State
-
+from ..tools.basic_tools import basic_tools
+from ..storage import add_tool_result, add_tool_call, add_message
 
 load_dotenv()
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+# define the final list of tools
+tools = basic_tools
+tool_node = ToolNode(tools=tools)
 
 llm_chat_model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+llm_chat_model_with_tools = llm_chat_model.bind_tools(tools)
 embeddings_generator = OpenAIEmbeddings(model="text-embedding-ada-002")
+
+
+
+async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
+    """Process tool node safely with metadata tracking."""
+    messages = state.get("messages", [])
+    if not messages:
+        # print("No messages found in state")
+        return state
+
+    last_message = messages[-1]
+    tool_calls = getattr(last_message, "tool_calls", None)
+
+    if tool_calls:
+        # print("Tool calls found")
+        result = tool_node.invoke(tool_calls, config)
+        # print(result)
+
+        # Add tool messages to the messages list
+        tool_messages = result.get("messages", [])
+
+        await add_tool_result(
+            user_message_id=state.get("last_human_message_id"),
+            ai_message_id=state.get("last_ai_message_id"),
+            output_data=[tc.dict() for tc in tool_messages]
+        )
+        
+        return {
+            "messages": tool_messages
+        }
+    else:
+        # print("No tool calls found")
+        return state
+
 
 async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Rebuild message history from storage and update state."""
-    thread_id = config['metadata']['thread_id']
-    thread_history: List[Dict[str, str]] = await get_messages(thread_id)
-    last_human_message = state.get("messages")[-1]
 
-    existing_messages = []
-    summary = ""
+    human_message_id = await add_message(
+        thread_id=config.get("configurable", {}).get("thread_id"), 
+        role="user", 
+        message_type="text", 
+        content=state.get("messages", [])[-1].content
+    )
 
-    if thread_history:
-        for msg_pair in thread_history:
-            if msg_pair["user_message"]:
-                existing_messages.append(HumanMessage(content=msg_pair["user_message"]))
-            if msg_pair["ai_message"]:
-                existing_messages.append(AIMessage(content=msg_pair["ai_message"]))
-            if msg_pair["summary"]:
-                summary = msg_pair["summary"]
+    # print("Memory state update")
+    # print('State at memory state update: ', state)
+    # print('-' * 50)
 
-    # Replace in-memory messages with DB messages + current human input
-    all_messages = [RemoveMessage(id=m.id) for m in state["messages"]] \
-        + existing_messages \
-        + [HumanMessage(content=last_human_message.content)]
+    # thread_id = config.get("metadata", {}).get("thread_id")
+    # thread_history: list[dict[str, str]] = await get_messages(thread_id)
+    # messages = state.get("messages", [])
+    # last_human_message = messages[-1] if messages else None
 
+    # existing_messages = []
+
+    # if thread_history:
+    #     for msg_pair in thread_history:
+    #         user_msg = msg_pair.get("user_message")
+    #         ai_msg = msg_pair.get("ai_message")
+
+    #         if user_msg:
+    #             existing_messages.append(HumanMessage(content=user_msg))
+    #         if ai_msg:
+    #             existing_messages.append(AIMessage(content=ai_msg))
+
+    # # Rebuild message list: clear current messages, add old ones, then the latest human message
+    # all_messages = [RemoveMessage(id=m.id) for m in messages] + existing_messages
+    # if last_human_message:
+    #     all_messages.append(HumanMessage(content=last_human_message.content))
+
+
+    # return {
+    #     "messages": all_messages,
+    #     "thread_id": thread_id,
+    # }
     return {
-        "summary": summary,
-        "messages": all_messages,
-        "thread_id": thread_id
+        "last_human_message_id": human_message_id
     }
+
 
 async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Process conversation through the language model with context."""
-    logger.debug(state)
+    
     messages = state.get("messages", [])
-    current_message = None
-    conversation_history = []
+    summary = state.get("summary", "")
 
-    if messages:
-        current_message = messages[-1].content if messages[-1].type == "human" else None
-        conversation_history = messages[:-1] if current_message else messages
+    prompt_parts = []
 
-    # Recent history: last 2 exchanges
-    recent_history = conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
-
-    context_parts = [
-        """You are a helpful AI assistant designed to behave like a voice assistant (e.g., Alexa or Google Assistant).
+    # Build system context
+    system_prompt = SystemMessage("""
+        You are a helpful AI assistant designed to behave like a voice assistant (e.g., Alexa or Google Assistant).
         Always answer clearly, concisely, and in a natural conversational style.
         Prioritize providing direct, useful information without unnecessary elaboration.
-        If you don’t know the answer, say so plainly instead of inventing information.
+        If you don't know the answer, say so plainly instead of inventing information.
         Follow user instructions carefully and avoid going off-topic.
         For multi-step or complex tasks, break responses into simple, actionable steps.
         Stay polite, neutral, and professional at all times.
@@ -81,75 +131,109 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
         Do not generate disallowed, unsafe, or harmful content.
         Avoid overly long answers unless explicitly requested.
         When clarification is needed, ask a short and direct follow-up question."""
-    ]
+    )
+    prompt_parts.append(system_prompt)
 
-    if state.get("summary") and state["summary"].strip():
-        context_parts.append(
-            f"""=== CONVERSATION SUMMARY CONTEXT ===
-            The following is a summary of earlier parts of this conversation:
-            {state['summary']}
-            === END CONVERSATION SUMMARY ===""")
+    # if summary is available, add it to the system prompt
+    if summary:
+        rag_prompt = SystemMessage(f"""Here is the summary of the conversation so far: {summary}""")
+        prompt_parts.append(rag_prompt)
 
-    if state.get("doc_rag_results") and state["doc_rag_results"].strip():
-        context_parts.append(
-            f"""=== DOCUMENT KNOWLEDGE CONTEXT ===
-            The following relevant information has been retrieved from documents:
-            {state['doc_rag_results']}
-            === END DOCUMENT CONTEXT ===""")
 
-    if state.get("web_rag_results") and state["web_rag_results"].strip():
-        context_parts.append(
-            f"""=== WEB SEARCH CONTEXT ===
-            The following relevant information has been retrieved from web search:
-            {state['web_rag_results']}
-            === END WEB SEARCH CONTEXT ===""")
+    # extract last human message & the index of the last human message
+    last_human_message = None
+    last_human_message_index = None
 
-    if recent_history:
-        history_lines = [
-            "=== RECENT CONVERSATION CONTEXT ===",
-            "The following shows the last 2 messages from your recent conversation:",
-        ]
-        for msg in recent_history:
-            role = "User" if msg.type == "human" else "Assistant"
-            history_lines.append(f"[{role}] {msg.content}")
+    for i, message in enumerate(messages):
+        if isinstance(message, HumanMessage):
+            last_human_message = message
+            last_human_message_index = i
 
-        history_lines.append("=== END RECENT CONVERSATION CONTEXT ===")
-        context_parts.append("\n".join(history_lines))
+    # print(f"Last human message index: {last_human_message_index}")
+    # print(f"Last human message content: {last_human_message.content}")
 
-    # Combine all context into ONE system message at the top
-    combined_context = "\n\n".join(context_parts)
-    
-    # Build prompt
-    prompt_parts = [("system", combined_context)]
-    if current_message:
-        prompt_parts.append(("user", current_message))
+    # Add last conversation history
+    MAX_HISTORY_LENGTH = 2
+    COUNT = 0
+    recent_history = []
 
+    # extract anything before last human_human_message_index till max_history_length considering the only the human messages will be covered when calculating the MAX_HISTORY_LENGTH
+    for index, message in reversed(list(enumerate(messages[:last_human_message_index]))):
+        
+        if isinstance(message, HumanMessage):
+            recent_history.append(message)
+            COUNT += 1
+            if COUNT == MAX_HISTORY_LENGTH:
+                break
+        else:
+            recent_history.append(message)
+
+    recent_history = reversed(recent_history)
+    prompt_parts.extend(recent_history)
+
+
+
+    # After adding the recent history, add the last human message and any flowwing messages like AI message containing tool calls or tool messages etc as well
+    current_conversation = messages[last_human_message_index:]
+    prompt_parts.extend(current_conversation)
+
+    # format the prompt parts into a chat prompt
     chat_prompt = ChatPromptTemplate.from_messages(prompt_parts)
-    formatted_messages = await chat_prompt.aformat_messages()
+    # print(f"Chat prompt: {chat_prompt.format()}")
+               
+    # invoke the LLM with the chat prompt
+    response = await llm_chat_model_with_tools.ainvoke(chat_prompt.messages, config=config)
+    # print(f"LLM response: {response.content if response.content else response.tool_calls}")
 
-    # Debug logging
-    logger.debug("=== STATE DEBUG ===")
-    logger.debug(f"Summary exists: {bool(state.get('summary'))}")
-    logger.debug(f"Doc RAG exists: {bool(state.get('doc_rag_results'))}")
-    logger.debug(f"Web RAG exists: {bool(state.get('web_rag_results'))}")
-    logger.debug(f"Total messages count: {len(messages)}")
-    logger.debug(f"Current message extracted: {bool(current_message)}")
-    logger.debug(f"History messages count: {len(conversation_history)}")
-    logger.debug(f"Recent history count: {len(recent_history)}")
-    logger.debug(f"Total prompt parts: {len(prompt_parts)}")
-    logger.debug("===================")
+    ai_message_id = await add_message(
+        thread_id=config.get("configurable", {}).get("thread_id"), 
+        role="assistant", 
+        message_type="text", 
+        content=response.content
+    )
 
-    # Call LLM
-    response = await llm_chat_model.ainvoke(formatted_messages, config=config)
-    return {"messages": [response]}
+    # if last message is AI message and tool calls are available, execute tools
+    if isinstance(response, AIMessage) and getattr(response, "tool_calls", None):
+        await add_tool_call(
+            user_message_id=state.get("last_human_message_id"),
+            ai_message_id=ai_message_id,
+            input_data=response.tool_calls
+        )
+
+    return {
+        "messages": [response], 
+        "last_ai_message_id": ai_message_id
+    }
+
+
 
 async def generate_embeddings_for_query(message: str) -> List[float]:
     """Generate embeddings for the given query text."""
     return await embeddings_generator.aembed_query(message)
 
-def should_continue(state: State) -> str:
-    """Decide whether to summarize conversation or end."""
-    return "summarize_conversation" if len(state["messages"]) > 2 else "workflow_completion"
+
+async def path_selector_post_llm_call(state: State, config: RunnableConfig) -> str:
+    """Decide which path to take after LLM call."""
+    messages = state.get("messages", [])
+
+    # fail-safe, if no messages, end the workflow
+    if not messages:
+        return "workflow_completion"
+
+    # get the last message
+    last_message = messages[-1]
+
+    # if last message is AI message and tool calls are available, execute tools
+    if isinstance(last_message, AIMessage) and getattr(last_message, "tool_calls", None):
+        return "tools_execution"
+
+    # if len(messages) is more than 2, summarize conversation
+    if len(messages) > 2:
+        return "summarize_conversation"
+
+    # else end the workflow
+    return "workflow_completion"
+
 
 def branch_selection_for_RAG(state: State) -> Union[str, List[str]]:
     """Decide which RAG branches to run based on state."""
@@ -158,26 +242,30 @@ def branch_selection_for_RAG(state: State) -> Union[str, List[str]]:
 
     if doc_enabled and web_enabled:
         return ["doc_rag_search", "web_rag_search"]
+
     if doc_enabled:
         return "doc_rag_search"
+
     if web_enabled:
         return "web_rag_search"
-    return "conversation"
+
+    return "call_model"
+
 
 def retrieve_data_from_doc_RAG(state: State) -> Dict[str, Any]:
     """Placeholder for document RAG retrieval."""
-    results = []  # TODO: implement actual document retrieval
-    retrieved_docs = '\n'.join(item['data'] for item in results)
-    return {"doc_rag_results": retrieved_docs}
+    pass
+
 
 def retrieve_data_from_web_RAG(state: State) -> Dict[str, Any]:
     """Placeholder for web RAG retrieval."""
-    retrieved_results = []  # TODO: implement actual web search
-    return {"web_rag_results": retrieved_results}
+    pass
+
 
 async def summarize_conversation(state: State) -> Dict[str, Any]:
     """Summarize the conversation into a compact text."""
     summary = state.get("summary", "")
+    messages = state.get("messages", [])
 
     if summary:
         summary_message = (
@@ -190,22 +278,24 @@ async def summarize_conversation(state: State) -> Dict[str, Any]:
     else:
         summary_message = "Create a summary of the conversation below."
 
-    messages = [{"role": "system", "content": summary_message}] + [
-        {"role": "user" if m.type == "human" else "assistant", "content": m.content}
-        for m in state["messages"]
+    chat_messages = [
+        {"role": "system", "content": summary_message}] + [
+        {"role": "user" if getattr(m, "type", "") == "human" else "assistant", "content": getattr(m, "content", "")}
+        for m in messages
     ]
-    
-    response = await llm_chat_model.ainvoke(messages, config={
-        "metadata": {
-            "thread_id": state.get("thread_id"),
+
+    config = RunnableConfig(
+        metadata={
+            "thread_id": state.get("thread_id", ""),
             "source_application": "summarize_conversation"
         }
-    })
+    )
 
-    delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-2]]
-    return {"summary": response.content, "messages": delete_messages}
+    response = await llm_chat_model.ainvoke(chat_messages, config=config)
+
+    return {"summary": getattr(response, "content", "")}
 
 
 async def workflow_completion(state: State) -> Dict[str, Any]:
     """Workflow completion node."""
-    return {"messages": state["messages"]}
+    return state

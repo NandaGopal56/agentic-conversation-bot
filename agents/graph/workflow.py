@@ -2,7 +2,6 @@
 Workflow definition for the conversation graph.
 Builds and configures the state graph with all nodes and edges.
 """
-from typing import Dict, Any
 from langgraph.graph import START, END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver as CheckpointMemorySaver
 from .state import State
@@ -13,9 +12,10 @@ from .nodes import (
     branch_selection_for_RAG,
     retrieve_data_from_doc_RAG,
     retrieve_data_from_web_RAG,
-    should_continue,
     summarize_conversation,
-    workflow_completion
+    workflow_completion,
+    tool_node_processor,
+    path_selector_post_llm_call
 )
 
 def build_workflow() -> StateGraph:
@@ -31,9 +31,10 @@ def build_workflow() -> StateGraph:
     workflow.add_node("memory_state_update", memory_state_update)
     workflow.add_node("doc_rag_search", retrieve_data_from_doc_RAG)
     workflow.add_node("web_rag_search", retrieve_data_from_web_RAG)
-    workflow.add_node("conversation", call_model)
+    workflow.add_node("call_model", call_model)
     workflow.add_node("summarize_conversation", summarize_conversation)
     workflow.add_node("workflow_completion", workflow_completion)
+    workflow.add_node("tools_execution", tool_node_processor)
     
     # Define the workflow edges
     workflow.add_edge(START, "memory_state_update")
@@ -43,24 +44,27 @@ def build_workflow() -> StateGraph:
         path_map={
             "doc_rag_search": "doc_rag_search",
             "web_rag_search": "web_rag_search",
-            "conversation": "conversation"
+            "call_model": "call_model"
         }
     )
     
-    # Connect RAG nodes to conversation
-    workflow.add_edge("doc_rag_search", "conversation")
-    workflow.add_edge("web_rag_search", "conversation")
+    # Connect RAG nodes to call_model
+    workflow.add_edge("doc_rag_search", "call_model")
+    workflow.add_edge("web_rag_search", "call_model")
     
-    # Add conditional edges after conversation
+    # Add conditional edges after call_model
     workflow.add_conditional_edges(
-        source="conversation",
-        path=should_continue,
+        source="call_model",
+        path=path_selector_post_llm_call,
         path_map={
+            "tools_execution": "tools_execution",
             "summarize_conversation": "summarize_conversation",
             "workflow_completion": "workflow_completion"
         }
     )
-    
+
+    workflow.add_edge("tools_execution", "call_model")
+
     # Connect the rest of the workflow
     workflow.add_edge("summarize_conversation", "workflow_completion")
     workflow.add_edge("workflow_completion", END)
