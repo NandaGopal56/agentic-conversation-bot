@@ -1,8 +1,9 @@
 import asyncio
 from typing import Dict, AsyncGenerator, Union
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from .graph import build_workflow
+from .storage import add_message, add_tool_call, add_tool_result
 
 # Load environment and build workflow
 load_dotenv()
@@ -66,60 +67,71 @@ class NodeCompletionProcessor:
     def __init__(self, thread_id: int, user_message: str):
         self.thread_id = thread_id
         self.user_message = user_message
+        self.last_user_message_id = None
+        self.last_ai_message_id = None
         self.final_ai_response = None
-    
+
     async def process_node_completion(self, state_snapshot) -> None:
         """
         Process complete state after a node finishes execution.
-        Routes handling based on which node completed.
-        Takes actions like saving, logging, etc. - does not yield anything.
+        Detect node name and call storage APIs identical to first code logic.
         """
+        node_name = state_snapshot.get("langgraph_node")     # <---- extract node name
         messages = state_snapshot.get("messages", [])
-        
-        if not messages:
-            return
-        
+
+        print(f'Snapshot: {state_snapshot}, Node: {node_name}')
+
         last_message = messages[-1]
-        
-        # Handle call_model node completion
-        if isinstance(last_message, AIMessage) and last_message.content:
-            await self._handle_call_model_completion(last_message)
-    
-    async def _handle_call_model_completion(self, ai_message: AIMessage) -> None:
-        """Handle completion of call_model node."""
-        self.final_ai_response = ai_message.content
-        
-        # Take actions like:
-        # - Save intermediate response
-        # - Log completion
-        # - Update metrics
-        print(f"[NodeCompletionProcessor] call_model completed with {len(ai_message.content)} characters")
-    
-    # Placeholder for future node handlers
-    # async def _handle_tool_node_completion(self, state_snapshot) -> None:
-    #     """Handle completion of tool execution node."""
-    #     pass
-    # 
-    # async def _handle_routing_node_completion(self, state_snapshot) -> None:
-    #     """Handle completion of routing decision node."""
-    #     pass
-    
+
+        if isinstance(last_message, HumanMessage) and node_name == "memory_state_update":
+            self.last_user_message_id = await add_message(
+                thread_id=self.thread_id,
+                role="user",
+                message_type="text",
+                content=last_message.content
+            )
+            return
+
+        if isinstance(last_message, AIMessage) and node_name == "call_model":
+            
+            # Save AI message
+            self.last_ai_message_id = await add_message(
+                thread_id=self.thread_id,
+                role="assistant",
+                message_type="text",
+                content=last_message.content
+            )
+
+            self.final_ai_response = last_message.content
+
+            # Save tool calls if any
+            if getattr(last_message, "tool_calls", None):
+                await add_tool_call(
+                    user_message_id=self.last_user_message_id,
+                    ai_message_id=self.last_ai_message_id,
+                    input_data=last_message.tool_calls
+                )
+
+            print("[NodeCompletionProcessor] call_model completed.")
+            return
+
+        if isinstance(last_message, ToolMessage) and node_name == "tool_node_processor":
+            await add_tool_result(
+                user_message_id=self.last_user_message_id,
+                ai_message_id=self.last_ai_message_id,
+                output_data=[last_message.model_dump()]
+            )
+            print("[NodeCompletionProcessor] tool execution stored.")
+            return
+
+        if node_name == "summarize_conversation":
+            return
+
     async def finalize(self) -> None:
-        """
-        Final actions after all nodes complete.
-        Handles persistence, cleanup, and any post-conversation tasks.
-        """
+        """Final actions after entire graph execution completes."""
         if self.final_ai_response:
-            # Persist conversation to database
-            # await save_conversation(self.thread_id, self.user_message, self.final_ai_response)
-            
-            # Generate conversation summary
-            # await generate_summary(self.thread_id)
-            
-            # Update user context/memory
-            # await update_user_context(self.thread_id)
-            
             print(f"[NodeCompletionProcessor] Conversation finalized for thread {self.thread_id}")
+
 
 
 async def run_conversation(
@@ -148,20 +160,20 @@ async def run_conversation(
     async for stream_mode, stream_data in workflow.astream(
         {"messages": [HumanMessage(content=message)]},
         {"configurable": {"thread_id": thread_id}},
-        stream_mode=["messages", "values"],
+        stream_mode=["messages", "custom"],
     ):
         if stream_mode == "messages":
             async for payload in token_processor.process_chunk(stream_data):
                 yield payload
         
-        elif stream_mode == "values":
-            await completion_processor.process_node_completion(stream_data)
+        # elif stream_mode == "custom":
+        #     await completion_processor.process_node_completion(stream_data)
     
     # Finalize both processors
     async for payload in token_processor.finalize():
         yield payload
     
-    await completion_processor.finalize()
+    # await completion_processor.finalize()
 
 
 async def invoke_conversation(

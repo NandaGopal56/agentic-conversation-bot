@@ -3,7 +3,6 @@ Node definitions for the conversation graph.
 Each function represents a node in the graph.
 """
 import logging
-import stat
 from typing import Dict, Any, List, Optional, Union
 from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage, ToolMessage, SystemMessage
 from langchain_core.prompts.chat import ChatPromptTemplate
@@ -12,10 +11,11 @@ from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from langgraph.prebuilt import ToolNode
+from langgraph.config import get_stream_writer
 from ..logger import logger
-# from ..storage import add_message, add_tool_call, add_tool_result
 from .state import State
 from ..tools.basic_tools import basic_tools
+from ..storage import add_tool_result, add_tool_call, add_message
 
 load_dotenv()
 
@@ -29,6 +29,7 @@ tool_node = ToolNode(tools=tools)
 llm_chat_model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
 llm_chat_model_with_tools = llm_chat_model.bind_tools(tools)
 embeddings_generator = OpenAIEmbeddings(model="text-embedding-ada-002")
+
 
 
 async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str, Any]:
@@ -49,11 +50,17 @@ async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str,
         # Add tool messages to the messages list
         tool_messages = result.get("messages", [])
 
-        # await add_tool_result(
-        #     user_message_id=last_message.id,
-        #     ai_message_id=last_message.id,
-        #     output_data=[tc.dict() for tc in tool_messages]
-        # )
+        await add_tool_result(
+            user_message_id=last_message.id,
+            ai_message_id=last_message.id,
+            output_data=[tc.dict() for tc in tool_messages]
+        )
+        stream_writer = get_stream_writer()
+        stream_writer({
+            "user_message_id": last_message.id,
+            "ai_message_id": last_message.id,
+            "output_data": [tc.dict() for tc in tool_messages]
+        })
         
         return {
             "messages": tool_messages
