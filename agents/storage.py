@@ -28,7 +28,6 @@ async def init_db():
             role TEXT NOT NULL,                 -- user / assistant / tool
             message_type TEXT NOT NULL,         -- text / tool_call / tool_result
             content TEXT,
-            metadata JSON,
             sequence INTEGER NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(thread_id) REFERENCES threads(id) ON DELETE CASCADE
@@ -101,23 +100,22 @@ async def get_all_threads():
 #  MESSAGE CRUD
 # -------------------------------------------------------------
 async def add_message(thread_id: int, role: str, message_type: str,
-                      content: str = None, metadata: dict = None) -> int:
+                      content: str = None) -> int:
     """
     Insert a message into a thread.
     Returns message_id.
     """
     async with aiosqlite.connect(DB_PATH) as db:
         seq = await _get_next_sequence(db, thread_id)
-        # print(thread_id, role, message_type, content, metadata, seq)
+        # print(thread_id, role, message_type, content, seq)
         cur = await db.execute("""
-            INSERT INTO messages (thread_id, role, message_type, content, metadata, sequence)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO messages (thread_id, role, message_type, content, sequence)
+            VALUES (?, ?, ?, ?, ?)
         """, (
             thread_id,
             role,
             message_type,
             content,
-            json.dumps(metadata) if metadata else None,
             seq
         ))
 
@@ -131,7 +129,7 @@ async def get_messages(thread_id: int):
     """
     async with aiosqlite.connect(DB_PATH) as db:
         rows = await db.execute_fetchall("""
-            SELECT id, role, message_type, content, metadata, sequence, created_at
+            SELECT id, role, message_type, content, sequence, created_at
             FROM messages
             WHERE thread_id = ?
             ORDER BY sequence ASC
@@ -206,14 +204,13 @@ async def get_full_thread(thread_id: int):
 
     async with aiosqlite.connect(DB_PATH) as db:
         for msg in messages:
-            msg_id, role, msg_type, content, metadata, seq, created = msg
+            msg_id, role, msg_type, content, seq, created = msg
 
             entry = {
                 "id": msg_id,
                 "role": role,
                 "type": msg_type,
                 "content": content,
-                "metadata": json.loads(metadata) if metadata else None,
                 "sequence": seq,
                 "created_at": created
             }

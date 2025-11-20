@@ -9,4 +9,5 @@ from langchain_core.messages import AnyMessage
 class State(MessagesState):
     messages: Annotated[List[AnyMessage], add_messages]
     thread_id: str
-    
+    last_human_message_id: int
+    last_ai_message_id: int
