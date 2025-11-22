@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated AI Bot Interface</title>
+    <style>
+        /* * DESIGN SYSTEM & VARIABLES */
+        :root {
+            /* Default Background (will be changed by JS) */
+            --bg-color: #F4A460;
+            
+            /* Features */
+            --outline-color: #1a0e0e;
+            --outline-weight: 1.5vmin; /* Slightly thicker for clearer cartoon look */
+            
+            /* Eyes */
+            --eye-white: #FDFDF0;
+            --eye-lid-blue: #7EC0CE; 
+            --pupil-black: #0d0d0d;
+            
+            /* Lips - Organic & Gender Neutral */
+            --lip-color: #D67D72;
+            --mouth-inner: #3E1212;
+            --tongue: #FF8585;
+            --teeth: #EEEEEE;
+            
+            /* Sizing */
+            --face-size: 85vmin;
+        }
+
+        /* Reset & Layout */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            transition: background-color 1s ease; /* Smooth color transition */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* --- MAIN CONTAINER --- */
+        .face-container {
+            width: var(--face-size);
+            height: var(--face-size);
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 25% 40% 35%;
+            
+            /* Base float animation, JS adds extra randomness */
+            transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* --- SHARED FEATURE STYLES --- */
+        .feature {
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* =========================================
+           EYEBROWS
+           ========================================= */
+        .brow-area {
+            grid-row: 1;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 2vmin;
+        }
+
+        .eyebrow {
+            width: 42%;
+            height: 1.8vmin;
+            background-color: var(--outline-color);
+            border-radius: 2vmin;
+        }
+
+        .brow-area.left .eyebrow { transform: rotate(8deg) translateY(1vmin); margin-right: 15%; }
+        .brow-area.right .eyebrow { transform: rotate(-8deg) translateY(1vmin); margin-left: 15%; }
+
+        /* =========================================
+           EYES (No Lashes, Organic Shape)
+           ========================================= */
+        .eye-area {
+            grid-row: 2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .eye-socket {
+            width: 65%;
+            height: 92%;
+            background-color: var(--eye-white);
+            border: var(--outline-weight) solid var(--outline-color);
+            /* Tall Oval Shape */
+            border-radius: 48% 48% 48% 48% / 60% 60% 40% 40%;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 0 3vmin rgba(0,0,0,0.05);
+            z-index: 2;
+        }
+
+        .eyelid {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 40%;
+            background-color: var(--eye-lid-blue);
+            border-bottom: var(--outline-weight) solid var(--outline-color);
+            z-index: 10;
+            transition: transform 0.1s ease-out;
+            border-radius: 0 0 50% 50% / 0 0 20% 20%;
+        }
+
+        .pupil-group {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            transition: transform 0.2s ease-out; /* Snappier movement */
+        }
+
+        .pupil {
+            width: 42%; height: 58%;
+            background-color: var(--pupil-black);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        /* Simple Sparkle */
+        .pupil::after {
+            content: ''; position: absolute;
+            top: 22%; right: 22%;
+            width: 20%; height: 20%;
+            background: white; border-radius: 50%;
+        }
+
+        /* =========================================
+           MOUTH (Organic Shapes Only)
+           ========================================= */
+        .mouth-area {
+            grid-row: 3;
+            grid-column: span 2;
+            display: flex;
+            justify-content: center;
+            padding-top: 3vmin;
+        }
+
+        .mouth-wrapper {
+            width: 35%; height: 22%;
+            background-color: var(--mouth-inner);
+            border: var(--outline-weight) solid var(--outline-color);
+            /* Neutral: Soft Oval */
+            border-radius: 50% 50% 50% 50% / 45% 45% 55% 55%; 
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                inset 0 0 0 1.5vmin var(--lip-color),
+                inset 0 -0.5vmin 0 1.5vmin rgba(0,0,0,0.1);
+            z-index: 5;
+        }
+
+        .teeth {
+            position: absolute;
+            top: 0; left: 20%; width: 60%; height: 25%;
+            background: var(--teeth);
+            border-radius: 0 0 50% 50%; /* Rounded teeth bottom */
+            transform: translateY(-150%);
+            transition: transform 0.2s;
+        }
+
+        .tongue {
+            position: absolute;
+            bottom: -20%; left: 25%; width: 50%; height: 60%;
+            background: var(--tongue);
+            border-radius: 50% 50% 0 0;
+            transform: translateY(150%);
+            transition: transform 0.3s;
+        }
+
+        /* =========================================
+           ANIMATIONS & STATES
+           ========================================= */
+        
+        /* Organic Speaking Morph - No square shapes! */
+        @keyframes organic-speak {
+            0% { height: 22%; width: 35%; border-radius: 50% 50% 50% 50% / 45% 45% 55% 55%; }
+            25% { height: 45%; width: 25%; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; } /* 'O' shape */
+            50% { height: 20%; width: 45%; border-radius: 40% 40% 60% 60% / 50% 50% 50% 50%; } /* Wide shape */
+            75% { height: 35%; width: 30%; border-radius: 45% 45% 55% 55% / 55% 55% 45% 45%; } /* 'U' shape */
+            100% { height: 22%; width: 35%; border-radius: 50% 50% 50% 50% / 45% 45% 55% 55%; }
+        }
+
+        @keyframes dizzy-pupil {
+            0% { transform: translate(-50%, -50%) rotate(0deg) translateX(1.5vmin) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg) translateX(1.5vmin) rotate(-360deg); }
+        }
+
+        /* --- STATE: HAPPY --- */
+        .state-happy .eyebrow.left { transform: rotate(-10deg) translateY(-1.5vmin); }
+        .state-happy .eyebrow.right { transform: rotate(10deg) translateY(-1.5vmin); }
+        .state-happy .eye-socket { 
+            height: 75%; margin-top: 15%; 
+            border-radius: 50% 50% 45% 45% / 70% 70% 30% 30%; /* Smooth crescent */
+        }
+        .state-happy .mouth-wrapper {
+            width: 48%; height: 45%;
+            /* Perfect Smile Curve - No square corners */
+            border-radius: 15% 15% 85% 85% / 15% 15% 85% 85%;
+        }
+        .state-happy .teeth { transform: translateY(0); height: 20%; }
+        .state-happy .tongue { transform: translateY(0); }
+
+        /* --- STATE: SAD --- */
+        .state-sad .eyebrow.left { transform: rotate(-20deg) translateY(-1vmin); }
+        .state-sad .eyebrow.right { transform: rotate(20deg) translateY(-1vmin); }
+        .state-sad .eyelid { transform: translateY(35%); }
+        .state-sad .mouth-wrapper {
+            width: 40%; height: 25%;
+            /* Frown Curve */
+            border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%;
+            transform: translateY(2vmin);
+        }
+
+        /* --- STATE: ANGRY --- */
+        .state-angry .eyebrow.left { transform: rotate(35deg) translateY(3vmin); }
+        .state-angry .eyebrow.right { transform: rotate(-35deg) translateY(3vmin); }
+        .state-angry .eyelid { transform: translateY(55%); }
+        .state-angry .eye-socket { border-radius: 20% 90% 90% 50%; } /* Sharp inner corners */
+        .state-angry .mouth-wrapper {
+            width: 32%; height: 15%;
+            /* Thin frown */
+            border-radius: 50% 50% 0 0 / 80% 80% 0 0; 
+            transform: translateY(2vmin);
+        }
+
+        /* --- STATE: SURPRISED --- */
+        .state-surprised .eyebrow { transform: translateY(-3vmin); }
+        .state-surprised .eye-socket { transform: scale(1.05); border-radius: 50%; }
+        .state-surprised .eyelid { transform: translateY(-100%); }
+        .state-surprised .pupil { transform: translate(-50%, -50%) scale(0.6); }
+        .state-surprised .mouth-wrapper {
+            width: 28%; height: 38%;
+            border-radius: 50%; /* Perfect Circle */
+        }
+
+        /* --- STATE: SPEAKING --- */
+        .state-speaking .mouth-wrapper {
+            animation: organic-speak 0.4s infinite linear;
+        }
+        .state-speaking .teeth { transform: translateY(0); }
+
+        /* --- STATE: LISTENING --- */
+        .state-listening .eyebrow { transform: translateY(-1.5vmin); }
+        /* Round small mouth, not square */
+        .state-listening .mouth-wrapper { width: 22%; height: 12%; border-radius: 50%; } 
+        
+        /* --- STATE: SLEEPY --- */
+        .state-sleepy .eyelid { transform: translateY(75%); }
+        .state-sleepy .pupil { transform: translate(-50%, -20%); }
+        .state-sleepy .mouth-wrapper { width: 25%; height: 20%; border-radius: 50%; }
+
+        /* --- STATE: CONFUSED --- */
+        .state-confused .eyebrow.left { transform: translateY(-2vmin); }
+        .state-confused .eyebrow.right { transform: translateY(1vmin) rotate(10deg); }
+        .state-confused .mouth-wrapper {
+            width: 30%; height: 20%;
+            /* Wobbly Oval */
+            border-radius: 40% 60% 60% 40% / 40% 40% 60% 60%;
+        }
+        .state-confused .pupil {
+            animation: dizzy-pupil 2s infinite linear;
+            transform-origin: center center;
+        }
+
+        /* =========================================
+           UI CONTROLS
+           ========================================= */
+        #ui-controls {
+            position: absolute;
+            bottom: 20px;
+            width: 90%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(8px);
+            padding: 15px;
+            border-radius: 15px;
+            z-index: 100;
+        }
+
+        button {
+            padding: 10px 15px;
+            border: 2px solid var(--outline-color);
+            background: #fff;
+            border-radius: 20px;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+        button:active { transform: translateY(2px); box-shadow: none; }
+        button.active { background: var(--lip-color); color: white; border-color: var(--mouth-inner); }
+
+    </style>
+</head>
+<body>
+
+    <!-- THE FACE -->
+    <div class="face-container" id="face">
+        <!-- Brows -->
+        <div class="brow-area left"><div class="eyebrow feature"></div></div>
+        <div class="brow-area right"><div class="eyebrow feature"></div></div>
+
+        <!-- Eyes (No Lashes) -->
+        <div class="eye-area left">
+            <div class="eye-socket feature">
+                <div class="eyelid feature"></div>
+                <div class="pupil-group"><div class="pupil feature"></div></div>
+            </div>
+        </div>
+        <div class="eye-area right">
+            <div class="eye-socket feature">
+                <div class="eyelid feature"></div>
+                <div class="pupil-group"><div class="pupil feature"></div></div>
+            </div>
+        </div>
+
+        <!-- Mouth -->
+        <div class="mouth-area">
+            <div class="mouth-wrapper feature">
+                <div class="teeth"></div>
+                <div class="tongue"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTROL PANEL -->
+    <div id="ui-controls">
+        <button onclick="botFace.setEmotion('neutral')">Neutral</button>
+        <button onclick="botFace.setEmotion('happy')">Happy</button>
+        <button onclick="botFace.setEmotion('sad')">Sad</button>
+        <button onclick="botFace.setEmotion('angry')">Angry</button>
+        <button onclick="botFace.setEmotion('surprised')">Surprised</button>
+        <button onclick="botFace.setEmotion('speaking')">Speaking</button>
+        <button onclick="botFace.setEmotion('listening')">Listening</button>
+        <button onclick="botFace.setEmotion('sleepy')">Sleepy</button>
+        <button onclick="botFace.setEmotion('confused')">Confused</button>
+    </div>
+
+    <script>
+        const botFace = (function() {
+            const face = document.getElementById('face');
+            const pupils = document.querySelectorAll('.pupil-group');
+            const lids = document.querySelectorAll('.eyelid');
+            const btns = document.querySelectorAll('button');
+            
+            let currentEmotion = 'neutral';
+            let behaviorInterval = null;
+
+            // Configuration for Emotions (Colors & Behaviors)
+            const emotionConfig = {
+                'neutral':   { bg: '#F4A460' },
+                'happy':     { bg: '#FFD700' }, // Gold
+                'sad':       { bg: '#778899' }, // Slate Gray
+                'angry':     { bg: '#CD5C5C' }, // Indian Red
+                'surprised': { bg: '#FF69B4' }, // Hot Pink
+                'speaking':  { bg: '#F4A460' },
+                'listening': { bg: '#87CEEB' }, // Sky Blue
+                'sleepy':    { bg: '#483D8B' }, // Dark Slate Blue
+                'confused':  { bg: '#98FB98' }  // Pale Green
+            };
+
+            function setEmotion(emotion) {
+                if (!emotionConfig[emotion]) return;
+
+                // 1. Update UI State Class
+                face.className = 'face-container state-' + emotion;
+                currentEmotion = emotion;
+
+                // 2. Update Background Color (CSS Variable)
+                document.documentElement.style.setProperty('--bg-color', emotionConfig[emotion].bg);
+
+                // 3. Update Buttons
+                btns.forEach(b => {
+                    if(b.innerText.toLowerCase() === emotion) b.classList.add('active');
+                    else b.classList.remove('active');
+                });
+
+                // 4. Reset & Restart Behaviors
+                resetFeatures();
+                clearInterval(behaviorInterval);
+                startRandomBehavior();
+            }
+
+            // --- RANDOM MOVEMENT ENGINE ---
+            // Adds "life" with random head tilts, breathing variance, and eye movements
+            function startRandomBehavior() {
+                
+                behaviorInterval = setInterval(() => {
+                    // --- A. Random Head Movements (Micro-adjustments) ---
+                    // Only applies if not in an intense animated state like 'angry' (shaking)
+                    if (currentEmotion !== 'angry') {
+                        const tilt = (Math.random() - 0.5) * 5; // +/- 2.5deg tilt
+                        const floatY = (Math.random() * 1.5);   // 0 to 1.5vmin vertical float
+                        const scale = 1 + (Math.random() * 0.02); // Breathing scale
+                        
+                        face.style.transform = `rotate(${tilt}deg) translateY(-${floatY}vmin) scale(${scale})`;
+                    }
+
+                    // --- B. Random Eye Saccades (Looking around) ---
+                    if (['neutral', 'happy', 'listening', 'speaking'].includes(currentEmotion)) {
+                        if(Math.random() > 0.6) { // 40% chance to move eyes
+                            const x = (Math.random() - 0.5) * 25;
+                            const y = (Math.random() - 0.5) * 15;
+                            moveEyes(x, y);
+                            
+                            // Return to center quickly
+                            setTimeout(() => {
+                                if (currentEmotion === 'listening') moveEyes(0, -10); // Listening gaze
+                                else moveEyes(0, 0);
+                            }, 800);
+                        }
+                    }
+
+                    // --- C. Random Blinking ---
+                    if (Math.random() > 0.7 && currentEmotion !== 'surprised' && currentEmotion !== 'sleepy') {
+                        blink();
+                    }
+
+                }, 1200); // Runs every 1.2 seconds for continuous random feel
+            }
+
+            function blink() {
+                lids.forEach(l => l.style.transform = 'translateY(60%)');
+                setTimeout(() => {
+                    lids.forEach(l => l.style.transform = '');
+                }, 120);
+            }
+
+            function moveEyes(x, y) {
+                pupils.forEach(p => {
+                    p.style.transform = `translate(${x}%, ${y}%)`;
+                });
+            }
+
+            function resetFeatures() {
+                pupils.forEach(p => p.style.transform = '');
+                lids.forEach(l => l.style.transform = '');
+                face.style.transform = ''; // Reset head tilt overrides
+            }
+
+            // Initialize
+            startRandomBehavior();
+            setEmotion('neutral');
+
+            return { setEmotion };
+        })();
+    </script>
+</body>
+</html>
