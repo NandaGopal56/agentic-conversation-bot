@@ -5,6 +5,7 @@ Each function represents a node in the graph.
 import logging
 from typing import Dict, Any, List, Optional, Union
 from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage, ToolMessage, SystemMessage
+from langchain_core.messages.tool import tool_call
 from langchain_core.prompts.chat import ChatPromptTemplate
 from langgraph.types import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -15,7 +16,7 @@ from langgraph.config import get_stream_writer
 from ..logger import logger
 from .state import State
 from ..tools.basic_tools import basic_tools
-from ..storage import add_tool_result, add_tool_call, add_message
+from ..storage import update_tool_result, add_tool_call, add_message
 
 load_dotenv()
 
@@ -43,24 +44,21 @@ async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str,
     tool_calls = getattr(last_message, "tool_calls", None)
 
     if tool_calls:
-        # print("Tool calls found")
         result = tool_node.invoke(tool_calls, config)
-        # print(result)
 
-        # Add tool messages to the messages list
         tool_messages = result.get("messages", [])
 
-        await add_tool_result(
-            user_message_id=state.get("last_human_message_id"),
-            ai_message_id=state.get("last_ai_message_id"),
-            output_data=[tc.dict() for tc in tool_messages]
-        )
+        for tool_message in tool_messages:
+            await update_tool_result(
+                message_id=state.get("last_ai_message_id"),
+                call_id=tool_message.tool_call_id,
+                output_json=tool_message.content
+            )
         
         return {
             "messages": tool_messages
         }
     else:
-        # print("No tool calls found")
         return state
 
 
@@ -70,7 +68,6 @@ async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str,
     human_message_id = await add_message(
         thread_id=config.get("configurable", {}).get("thread_id"), 
         role="user", 
-        message_type="text", 
         content=state.get("messages", [])[-1].content
     )
 
@@ -188,17 +185,19 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
     ai_message_id = await add_message(
         thread_id=config.get("configurable", {}).get("thread_id"), 
         role="assistant", 
-        message_type="text", 
         content=response.content
     )
 
     # if last message is AI message and tool calls are available, execute tools
     if isinstance(response, AIMessage) and getattr(response, "tool_calls", None):
-        await add_tool_call(
-            user_message_id=state.get("last_human_message_id"),
-            ai_message_id=ai_message_id,
-            input_data=response.tool_calls
-        )
+        tool_calls = response.tool_calls
+
+        for tool_call in tool_calls:
+            await add_tool_call(
+                message_id=ai_message_id,
+                call_id=tool_call.get("id"),
+                input_json=tool_call
+            )
 
     return {
         "messages": [response], 

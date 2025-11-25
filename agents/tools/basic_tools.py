@@ -52,6 +52,13 @@ def get_wind_details(location: str) -> Dict:
         "gust_kph": current.get("gust_kph")
     }
 
+@tool
+def get_distance_between_two_locations(location1: str, location2: str) -> Dict:
+    """
+    Returns distance between two locations.
+    """
+    return 'distance between ' + location1 + ' and ' + location2 + ' is 100 km'
+
 
 @tool
 def geocode_address(address: str) -> dict:
@@ -125,4 +132,4 @@ def fetch_nearby_restaurants(latitude: float, longitude: float) -> dict:
     # fallback
     return {"restaurants": []}
 
-basic_tools = [get_location_details, get_current_weather, get_wind_details, geocode_address, fetch_nearby_restaurants]
+basic_tools = [get_location_details, get_current_weather, get_wind_details, geocode_address, fetch_nearby_restaurants, get_distance_between_two_locations]
