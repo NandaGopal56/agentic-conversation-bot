@@ -3,7 +3,7 @@ from typing import Dict, AsyncGenerator, Union
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from .graph import build_workflow
-from .storage import add_message, add_tool_call, add_tool_result
+from .storage import add_message, add_tool_call, update_tool_result
 
 # Load environment and build workflow
 load_dotenv()
@@ -84,43 +84,41 @@ class NodeCompletionProcessor:
         last_message = messages[-1]
 
         if isinstance(last_message, HumanMessage) and node_name == "memory_state_update":
-            self.last_user_message_id = await add_message(
-                thread_id=self.thread_id,
-                role="user",
-                message_type="text",
-                content=last_message.content
-            )
+            # self.last_user_message_id = await add_message(
+            #     thread_id=self.thread_id,
+            #     role="user",
+            #     content=last_message.content
+            # )
             return
 
         if isinstance(last_message, AIMessage) and node_name == "call_model":
             
             # Save AI message
-            self.last_ai_message_id = await add_message(
-                thread_id=self.thread_id,
-                role="assistant",
-                message_type="text",
-                content=last_message.content
-            )
+            # self.last_ai_message_id = await add_message(
+            #     thread_id=self.thread_id,
+            #     role="assistant",
+            #     content=last_message.content
+            # )
 
             self.final_ai_response = last_message.content
 
             # Save tool calls if any
             if getattr(last_message, "tool_calls", None):
-                await add_tool_call(
-                    user_message_id=self.last_user_message_id,
-                    ai_message_id=self.last_ai_message_id,
-                    input_data=last_message.tool_calls
-                )
+                # await add_tool_call(
+                #     message_id=self.last_ai_message_id,
+                #     tool_args=last_message.tool_calls,
+                #     tool_id=last_message.tool_calls[0].id
+                # )
+                pass
 
             print("[NodeCompletionProcessor] call_model completed.")
             return
 
         if isinstance(last_message, ToolMessage) and node_name == "tool_node_processor":
-            await add_tool_result(
-                user_message_id=self.last_user_message_id,
-                ai_message_id=self.last_ai_message_id,
-                output_data=[last_message.model_dump()]
-            )
+            # await update_tool_result(
+            #     message_id=self.last_ai_message_id,
+            #     tool_result=last_message.model_dump()
+            # )
             print("[NodeCompletionProcessor] tool execution stored.")
             return
 
@@ -191,7 +189,7 @@ async def invoke_conversation(
         status = payload["status"]
         response = payload["response"]
         
-        print(f"Node: {node}, Status: {status}, Response: {response}")
+        # print(f"Node: {node}, Status: {status}, Response: {response}")
 
         # Handle real-time LLM token streaming
         if node == "call_model" and status == "streaming":
@@ -216,7 +214,7 @@ async def main():
     # Demo conversation scenarios
     demo_conversations = [
         "Hello! How are you today?",
-        "What's the weather like in New York?",
+        "What's the weather like in New York and distance between New York and Paris?",
         "Can you help me find restaurants near MG Road, Bangalore?",
         "Tell me a short joke about programming",
         "What's 25 * 47?",
