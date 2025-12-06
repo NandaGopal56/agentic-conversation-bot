@@ -3,20 +3,18 @@ Node definitions for the conversation graph.
 Each function represents a node in the graph.
 """
 import logging
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Union
 from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage, ToolMessage, SystemMessage
-from langchain_core.messages.tool import tool_call
 from langchain_core.prompts.chat import ChatPromptTemplate
 from langgraph.types import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from langgraph.prebuilt import ToolNode
-from langgraph.config import get_stream_writer
 from ..logger import logger
 from .state import State
 from ..tools.basic_tools import basic_tools
-from ..storage import update_tool_result, add_tool_call, add_message
+from ..storage import update_tool_result, add_tool_call, add_message, get_full_thread
 
 load_dotenv()
 
@@ -52,7 +50,7 @@ async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str,
             await update_tool_result(
                 message_id=state.get("last_ai_message_id"),
                 call_id=tool_message.tool_call_id,
-                output_json=tool_message.content
+                tool_output=tool_message.content
             )
         
         return {
@@ -65,44 +63,50 @@ async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str,
 async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Rebuild message history from storage and update state."""
 
+    thread_id=config.get("configurable", {}).get("thread_id")
+    last_human_message = state.get("messages", [])[-1]
+
     human_message_id = await add_message(
-        thread_id=config.get("configurable", {}).get("thread_id"), 
+        thread_id=thread_id, 
         role="user", 
-        content=state.get("messages", [])[-1].content
+        content=last_human_message.content
     )
 
-    # print("Memory state update")
-    # print('State at memory state update: ', state)
-    # print('-' * 50)
+    thread_id = config.get("metadata", {}).get("thread_id")
+    thread_history: list[dict[str, str]] = await get_full_thread(thread_id)
+    messages = state.get("messages", [])
+    last_human_message = messages[-1] if messages else None
 
-    # thread_id = config.get("metadata", {}).get("thread_id")
-    # thread_history: list[dict[str, str]] = await get_messages(thread_id)
-    # messages = state.get("messages", [])
-    # last_human_message = messages[-1] if messages else None
+    existing_messages = []
 
-    # existing_messages = []
+    if thread_history:
+        for message in thread_history:
+            role = message['role']
 
-    # if thread_history:
-    #     for msg_pair in thread_history:
-    #         user_msg = msg_pair.get("user_message")
-    #         ai_msg = msg_pair.get("ai_message")
+            if role == 'user':
+                msg = HumanMessage(
+                    content=message['content']
+                )
+                existing_messages.append(msg)
+            
+            if role == 'assistant':
+                ai_tool_calls = [ai_tool_call['tool_input_json'] for ai_tool_call in message['tool_calls']]
+                msg = AIMessage(
+                    content=message['content'],
+                    tool_calls=ai_tool_calls
+                )
+                existing_messages.append(msg)
 
-    #         if user_msg:
-    #             existing_messages.append(HumanMessage(content=user_msg))
-    #         if ai_msg:
-    #             existing_messages.append(AIMessage(content=ai_msg))
+                tool_call_responses = {ai_tool_call['call_id']: ai_tool_call['tool_output'] for ai_tool_call in message['tool_calls']}
 
-    # # Rebuild message list: clear current messages, add old ones, then the latest human message
-    # all_messages = [RemoveMessage(id=m.id) for m in messages] + existing_messages
-    # if last_human_message:
-    #     all_messages.append(HumanMessage(content=last_human_message.content))
+                for call_id, output in tool_call_responses.items():
+                    existing_messages.append(ToolMessage(content=output, tool_call_id=call_id))
 
-
-    # return {
-    #     "messages": all_messages,
-    #     "thread_id": thread_id,
-    # }
+    # Rebuild message list: clear current messages, add old ones
+    all_messages = [RemoveMessage(id=m.id) for m in messages] + existing_messages
+    
     return {
+        "messages": all_messages,
         "last_human_message_id": human_message_id
     }
 
@@ -196,7 +200,7 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
             await add_tool_call(
                 message_id=ai_message_id,
                 call_id=tool_call.get("id"),
-                input_json=tool_call
+                tool_input_json=tool_call
             )
 
     return {
