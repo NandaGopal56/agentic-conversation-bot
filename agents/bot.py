@@ -213,20 +213,18 @@ async def main():
     
     # Demo conversation scenarios
     demo_conversations = [
-        "Hello! How are you today?",
-        "What's the weather like in New York and distance between New York and Paris?",
-        "Can you help me find restaurants near MG Road, Bangalore?",
+        # "Hello! How are you today?",
+        # "What's the weather like in New York and distance between New York and Paris?",
+        # "Can you help me find restaurants near MG Road, Bangalore?",
         "Tell me a short joke about programming",
         "What's 25 * 47?",
     ]
     
     for user_message in demo_conversations:
         print(f"\n{'='*60}")
-        print(f"User: {user_message}")
-        print(f"{'='*60}")
+        print(f"User: {user_message}", end='\n\n')
         response = await invoke_conversation(user_message, thread_id)
-        print(f"\n{'='*60}")
-        print(f"Final AI Response: {response}")
+        print(f"Final AI Response: {response}", end='\n\n')
         print(f"{'='*60}\n")
 
 
