@@ -61,77 +61,6 @@ class TokenStreamProcessor:
             self.buffer = ""
 
 
-class NodeCompletionProcessor:
-    """Processes 'values' stream mode - handles actions after node completion."""
-    
-    def __init__(self, thread_id: int, user_message: str):
-        self.thread_id = thread_id
-        self.user_message = user_message
-        self.last_user_message_id = None
-        self.last_ai_message_id = None
-        self.final_ai_response = None
-
-    async def process_node_completion(self, state_snapshot) -> None:
-        """
-        Process complete state after a node finishes execution.
-        Detect node name and call storage APIs identical to first code logic.
-        """
-        node_name = state_snapshot.get("langgraph_node")     # <---- extract node name
-        messages = state_snapshot.get("messages", [])
-
-        print(f'Snapshot: {state_snapshot}, Node: {node_name}')
-
-        last_message = messages[-1]
-
-        if isinstance(last_message, HumanMessage) and node_name == "memory_state_update":
-            # self.last_user_message_id = await add_message(
-            #     thread_id=self.thread_id,
-            #     role="user",
-            #     content=last_message.content
-            # )
-            return
-
-        if isinstance(last_message, AIMessage) and node_name == "call_model":
-            
-            # Save AI message
-            # self.last_ai_message_id = await add_message(
-            #     thread_id=self.thread_id,
-            #     role="assistant",
-            #     content=last_message.content
-            # )
-
-            self.final_ai_response = last_message.content
-
-            # Save tool calls if any
-            if getattr(last_message, "tool_calls", None):
-                # await add_tool_call(
-                #     message_id=self.last_ai_message_id,
-                #     tool_args=last_message.tool_calls,
-                #     tool_id=last_message.tool_calls[0].id
-                # )
-                pass
-
-            print("[NodeCompletionProcessor] call_model completed.")
-            return
-
-        if isinstance(last_message, ToolMessage) and node_name == "tool_node_processor":
-            # await update_tool_result(
-            #     message_id=self.last_ai_message_id,
-            #     tool_result=last_message.model_dump()
-            # )
-            print("[NodeCompletionProcessor] tool execution stored.")
-            return
-
-        if node_name == "summarize_conversation":
-            return
-
-    async def finalize(self) -> None:
-        """Final actions after entire graph execution completes."""
-        if self.final_ai_response:
-            print(f"[NodeCompletionProcessor] Conversation finalized for thread {self.thread_id}")
-
-
-
 async def run_conversation(
     message: str,
     thread_id: int = 1,
@@ -152,26 +81,20 @@ async def run_conversation(
     """
     # Initialize processors
     token_processor = TokenStreamProcessor()
-    completion_processor = NodeCompletionProcessor(thread_id, message)
 
     # Stream through workflow - delegate everything to processors
     async for stream_mode, stream_data in workflow.astream(
         {"messages": [HumanMessage(content=message)]},
         {"configurable": {"thread_id": thread_id}},
-        stream_mode=["messages", "custom"],
+        stream_mode=["messages"],
     ):
         if stream_mode == "messages":
             async for payload in token_processor.process_chunk(stream_data):
                 yield payload
         
-        # elif stream_mode == "custom":
-        #     await completion_processor.process_node_completion(stream_data)
-    
     # Finalize both processors
     async for payload in token_processor.finalize():
         yield payload
-    
-    # await completion_processor.finalize()
 
 
 async def invoke_conversation(
