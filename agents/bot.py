@@ -1,9 +1,9 @@
 import asyncio
+import sys
 from typing import Dict, AsyncGenerator, Union
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage
 from .graph import build_workflow
-from .storage import add_message, add_tool_call, update_tool_result
 
 # Load environment and build workflow
 load_dotenv()
@@ -132,23 +132,41 @@ async def invoke_conversation(
 
 async def main():
     """Example CLI runner with demo conversations."""
-    thread_id = 12
+    thread_id = 13
+    mode = None
+    if len(sys.argv) > 1:
+        mode = sys.argv[1].strip()
+    else:
+        mode = "2"
     
-    # Demo conversation scenarios
-    demo_conversations = [
-        # "Hello! How are you today?",
-        # "What's the weather like in New York and distance between New York and Paris?",
-        # "Can you help me find restaurants near MG Road, Bangalore?",
-        "Tell me a short joke about programming",
-        "What's 25 * 47?",
-    ]
-    
-    for user_message in demo_conversations:
-        print(f"\n{'='*60}")
-        print(f"User: {user_message}", end='\n\n')
-        response = await invoke_conversation(user_message, thread_id)
-        print(f"Final AI Response: {response}", end='\n\n')
-        print(f"{'='*60}\n")
+    if mode == "1":
+        while True:
+            try:
+                user_message = input("You: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                break
+            if not user_message:
+                continue
+            if user_message.lower() in {"exit", "quit"}:
+                break
+            response = await invoke_conversation(user_message, thread_id)
+            print(f"Assistant: {response}")
+    else:
+        demo_conversations = [
+            # "Hello! How are you today?",
+            # "What's the weather like in New York and distance between New York and Paris?",
+            # "Can you help me find restaurants near MG Road, Bangalore?",
+            # "Tell me a short joke about programming",
+            # "What's 25 * 47?",
+            "can you tell me whats you are seeing now from camera feed ?"
+        ]
+        
+        for user_message in demo_conversations:
+            print(f"\n{'='*60}")
+            print(f"User: {user_message}", end='\n\n')
+            response = await invoke_conversation(user_message, thread_id)
+            print(f"Final AI Response: {response}", end='\n\n')
+            print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":

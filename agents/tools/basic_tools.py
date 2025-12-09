@@ -1,9 +1,16 @@
 import os
+import uuid
 import requests
 from langchain.tools import tool
 from typing import Dict
 from dotenv import load_dotenv
 import json
+import cv2
+import base64
+import tempfile
+from PIL import Image
+import os
+import uuid
 
 load_dotenv()
 
@@ -33,7 +40,6 @@ def get_current_weather(location: str) -> Dict:
     Returns current weather details including temperature, humidity, cloud cover, UV index, etc.
     """
     data = fetch_weather_data(location).get("current", {})
-    data = '38 degrees celsius'
     return json.dumps(data)
 
 
@@ -52,84 +58,58 @@ def get_wind_details(location: str) -> Dict:
         "gust_kph": current.get("gust_kph")
     }
 
-@tool
-def get_distance_between_two_locations(location1: str, location2: str) -> Dict:
-    """
-    Returns distance between two locations.
-    """
-    return 'distance between ' + location1 + ' and ' + location2 + ' is 100 km'
-
 
 @tool
-def geocode_address(address: str) -> dict:
+def capture_camera_image() -> Image:
     """
-    Convert a physical address into GPS coordinates.
-    Supported cities:
-      - Bangalore
-      - Delhi
-      - Mumbai
-    Output:
-      - latitude: float
-      - longitude: float
+    Tool Name: capture_camera_image
+
+    Purpose:
+    - Captures a single live frame from the system camera
+    - Returns a PIL Image object that can be directly passed to LLM vision models
+    - Optionally saves the image to ./temporary/ for debugging
+
+    Returns:
+    PIL.Image.Image object ready for LLM consumption
     """
+    
 
-    address_lower = address.lower()
+    max_width = 320
+    jpeg_quality = 70
+    temp_dir = "temporary"
 
-    if "bangalore" in address_lower:
-        return {"latitude": 12.9716, "longitude": 77.5946}
+    # Ensure temp directory exists (for optional debugging saves)
+    os.makedirs(temp_dir, exist_ok=True)
 
-    if "delhi" in address_lower:
-        return {"latitude": 28.6139, "longitude": 77.2090}
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        raise RuntimeError("Could not open camera")
 
-    if "mumbai" in address_lower:
-        return {"latitude": 19.0760, "longitude": 72.8777}
+    # Warm up camera
+    for _ in range(5):
+        cap.read()
 
-    # fallback (forces LLM to handle unknown city gracefully)
-    return {"latitude": 0.0, "longitude": 0.0}
+    ret, frame = cap.read()
+    cap.release()
 
-@tool
-def fetch_nearby_restaurants(latitude: float, longitude: float) -> dict:
-    """
-    Return nearby restaurants based on given coordinates.
-    Mock conditional logic for:
-      - Bangalore
-      - Delhi
-      - Mumbai
-    Output:
-      - restaurants: list[str]
-    """
+    if not ret:
+        raise RuntimeError("Could not read frame from camera")
 
-    # Bangalore
-    if abs(latitude - 12.9716) < 0.01 and abs(longitude - 77.5946) < 0.01:
-        return {
-            "restaurants": [
-                "Empire Restaurant",
-                "Truffles Koramangala",
-                "Toit Indiranagar"
-            ]
-        }
+    # Resize while keeping aspect ratio
+    h, w = frame.shape[:2]
+    if w > max_width:
+        scale = max_width / w
+        frame = cv2.resize(frame, (max_width, int(h * scale)))
 
-    # Delhi
-    if abs(latitude - 28.6139) < 0.01 and abs(longitude - 77.2090) < 0.01:
-        return {
-            "restaurants": [
-                "Karim’s Jama Masjid",
-                "Sita Ram Diwan Chand",
-                "Bukhara ITC Maurya"
-            ]
-        }
-
-    # Mumbai
-    if abs(latitude - 19.0760) < 0.01 and abs(longitude - 72.8777) < 0.01:
-        return {
-            "restaurants": [
-                "Leopold Cafe",
-                "Shree Thaker Bhojanalay",
-                "Bademiya Colaba"
-            ]
-        }
-
-    # fallback
-    return {"restaurants": []}
-
-basic_tools = [get_location_details, get_current_weather, get_wind_details, geocode_address, fetch_nearby_restaurants, get_distance_between_two_locations]
+    # Convert BGR (OpenCV format) to RGB (PIL format)
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    
+    # Convert numpy array to PIL Image
+    pil_image = Image.fromarray(frame_rgb)
+    
+    # Optional: Save for debugging (commented out by default)
+    debug_path = os.path.join(temp_dir, f"capture_{int(uuid.uuid4())}.jpg")
+    pil_image.save(debug_path, quality=jpeg_quality)
+    
+    return pil_image
+basic_tools = [capture_camera_image, get_location_details, get_current_weather, get_wind_details]
