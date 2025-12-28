@@ -10,6 +10,13 @@ load_dotenv()
 workflow = build_workflow()
 
 
+# get png bytes
+png_bytes = workflow.get_graph().draw_mermaid_png()
+# write to file
+with open("langgraph.png", "wb") as f:
+    f.write(png_bytes)
+
+
 class TokenStreamProcessor:
     """Processes 'messages' stream mode - handles real-time LLM token streaming."""
     
@@ -158,7 +165,7 @@ async def main():
             # "Can you help me find restaurants near MG Road, Bangalore?",
             # "Tell me a short joke about programming",
             # "What's 25 * 47?",
-            "can you tell me whats you are seeing now from camera feed ?"
+            "can you tell me whats you are seeing now from camera feed ? also whats the current news of today"
         ]
         
         for user_message in demo_conversations:

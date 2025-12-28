@@ -11,3 +11,4 @@ class State(MessagesState):
     thread_id: str
     last_human_message_id: int
     last_ai_message_id: int
+    tool_classifier_result: str

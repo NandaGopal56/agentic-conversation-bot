@@ -9,12 +9,14 @@ from langchain_core.prompts.chat import ChatPromptTemplate
 from langgraph.types import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
+from langchain_core.output_parsers import PydanticOutputParser
 from dotenv import load_dotenv
 from langgraph.prebuilt import ToolNode
 from ..logger import logger
 from .state import State
 from ..tools.basic_tools import basic_tools
 from ..storage import update_tool_result, add_tool_call, add_message, get_full_thread
+from .schemas import ToolClassifierOutput, ToolEnum
 
 load_dotenv()
 
@@ -27,6 +29,7 @@ tool_node = ToolNode(tools=tools)
 
 llm_chat_model = ChatOpenAI(model="gpt-5-nano-2025-08-07")
 llm_chat_model_with_tools = llm_chat_model.bind_tools(tools)
+
 embeddings_generator = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 
@@ -59,6 +62,104 @@ async def tool_node_processor(state: State, config: RunnableConfig) -> Dict[str,
     else:
         return state
 
+def fanout_selector(state: State) -> list[str]:
+    enum_to_node = {
+        ToolEnum.INTERNET_SEARCH: "internet_search",
+        ToolEnum.VIDEO_CAPTURE: "video_capture",
+        ToolEnum.DOCUMENT_RAG: "document_rag_search",
+    }
+
+    tools = state.get("tool_classifier_result", [])
+
+    return [enum_to_node[t] for t in tools if t in enum_to_node]
+
+
+def join_after_tools(state: State) -> State:
+    """
+    Acts as a synchronization barrier.
+    All parallel nodes must reach here.
+    """
+    return state
+
+
+async def tool_classifier_step(state: dict, config: RunnableConfig) -> Dict[str, Any]:
+    last_message = state["messages"][-1].content
+
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0,
+    )
+
+    parser = PydanticOutputParser(pydantic_object=ToolClassifierOutput)
+
+    system_prompt = f"""
+        You are a classifier.
+
+        Decide which tools are REQUIRED based on the user request.
+
+        Allowed tools:
+        - internet_search
+        - video_capture
+
+        Rules:
+        - Only include required tools
+        - If none, return an empty list
+
+        {parser.get_format_instructions()}
+    """
+
+    response = await llm.ainvoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=last_message)
+    ])
+
+    parsed: ToolClassifierOutput = parser.parse(response.content)
+
+    return {
+        "tool_classifier_result": parsed.tools
+    }
+
+
+async def path_selector_post_tool_classifier(state: dict, config: RunnableConfig) -> Dict[str, Any]:
+    tool_classifier_result = state.get("tool_classifier_result")
+
+    if tool_classifier_result == "none":
+        return "call_model"
+    
+    elif tool_classifier_result == 'video_capture':
+        return "video_capture"
+    
+    elif tool_classifier_result == 'internet_search':
+        return "internet_search"
+    
+    else:
+        return "call_model"
+
+async def video_capture(state: dict, config: RunnableConfig) -> Dict[str, Any]:
+    
+    print("Video capture")
+
+    image_url = "https://ihe-delft-ihe-website-production.s3.eu-central-1.amazonaws.com/s3fs-public/styles/530x530/public/2022-11/Sea%20level%20rise%20Vietnam.jpg"
+
+    return {
+        "messages": [
+            HumanMessage(content=[
+                {"type": "text", "text": "Here is the image:"},
+                {"type": "image_url", "image_url": {"url": image_url}}
+            ])
+        ]
+    }
+    
+def retrieve_data_from_doc_RAG(state: State) -> Dict[str, Any]:
+    """Placeholder for document RAG retrieval."""
+    print("Retrieving data from document RAG")
+    pass
+
+
+def retrieve_data_from_web_RAG(state: State) -> Dict[str, Any]:
+    """Placeholder for web RAG retrieval."""
+    print("Retrieving data from web RAG")
+    pass
 
 async def memory_state_update(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Rebuild message history from storage and update state."""
@@ -161,8 +262,6 @@ async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
             last_human_message = message
             last_human_message_index = i
 
-    # print(f"Last human message index: {last_human_message_index}")
-    # print(f"Last human message content: {last_human_message.content}")
 
     # Add last conversation history
     MAX_HISTORY_LENGTH = 2
@@ -266,14 +365,7 @@ def branch_selection_for_RAG(state: State) -> Union[str, List[str]]:
     return "call_model"
 
 
-def retrieve_data_from_doc_RAG(state: State) -> Dict[str, Any]:
-    """Placeholder for document RAG retrieval."""
-    pass
 
-
-def retrieve_data_from_web_RAG(state: State) -> Dict[str, Any]:
-    """Placeholder for web RAG retrieval."""
-    pass
 
 
 async def summarize_conversation(state: State) -> Dict[str, Any]:
