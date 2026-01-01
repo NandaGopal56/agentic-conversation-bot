@@ -32,24 +32,23 @@ async def other_operations():
     Any additional async operations you want to run
     after services are started.
     """
-    # while True:
-    #     try:
-    #         user_input = input("You: ").strip()
-    #     except (EOFError, KeyboardInterrupt):
-    #         break
+    while True:
+        try:
+            user_input = input("You: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
 
-    #     if not user_input:
-    #         continue
-    #     if user_input.lower() in {"exit", "quit"}:
-    #         break
+        if not user_input:
+            continue
+        if user_input.lower() in {"exit", "quit"}:
+            break
 
-    #     print("Assistant: ", end="", flush=True)
+        print("Assistant: ", end="", flush=True)
 
-    #     async for token in invoke_conversation(user_input, thread_id=13):
-    #         print(token, end="", flush=True)
+        async for token in invoke_conversation(user_input, thread_id=13):
+            print(token, end="", flush=True)
 
-    #     print("\n")
-    pass
+        print("\n")
 
 
 # -------------------------------------------------------------------

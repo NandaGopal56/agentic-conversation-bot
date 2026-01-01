@@ -101,17 +101,42 @@ async def tool_classifier_step(state: dict, config: RunnableConfig) -> Dict[str,
     parser = PydanticOutputParser(pydantic_object=ToolClassifierOutput)
 
     system_prompt = f"""
-        You are a classifier.
-
-        Decide which tools are REQUIRED based on the user request.
-
+        For every user request, decide whether camera footage (i.e., "video_capture") is potentially required. Classify every query as needing camera footage or not, even if it may only remotely need such footage.
         Allowed tools:
         - internet_search
         - video_capture
-
         Rules:
-        - Only include required tools
-        - If none, return an empty list
+        - Return "video_capture" for any query that might need camera footage, even if the need is indirect or uncertain.
+        - Only include tools that are potentially required for the query.
+        - Return an empty list if no tools are needed.
+        - Any query that requires real-time visual information, observation, or footage from the environment should include "video_capture".
+        - If the user asks about their current action, state, behavior, or surroundings
+          AND the system has access to a camera,
+          ASSUME visual observation is required and return "video_capture".
+        - When a query is ambiguous between conversational interpretation and visual observation,
+          ALWAYS prefer visual observation and return "video_capture".
+        - When in doubt, err on the side of caution and include "video_capture" if there's any possibility
+          that the user might need visual context.
+        - When the user asks about their environment, surroundings, or what they can see,
+          ALWAYS include "video_capture" to provide accurate visual context.
+        - When the user asks about their current location, position, or physical situation,
+          ALWAYS include "video_capture" to provide accurate visual context.
+
+        This includes but is not limited to queries like:
+        - "Show me what the robot sees"
+        - "Capture live video"
+        - "Analyze the current scene"
+        - "Check if there is an obstacle ahead"
+        - "What is in front of me?"
+        - "Detect people or objects nearby"
+        - "Record the surroundings"
+        - "Monitor activity in this area"
+        - "Look around the room"
+        - "Inspect this object"
+        - "Track moving objects"
+        - "Detect colors or shapes in view"
+        - Queries that require online information, web search, or external data should include "internet_search".
+        The output should be formatted as a JSON instance that conforms to the JSON schema below.
 
         {parser.get_format_instructions()}
     """
