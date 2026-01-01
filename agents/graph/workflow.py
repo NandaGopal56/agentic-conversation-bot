@@ -58,6 +58,7 @@ def build_workflow() -> StateGraph:
             "video_capture": "video_capture",
             "internet_search": "internet_search",
             "document_rag_search": "document_rag_search",
+            "call_model": "call_model",
         }
     )
 

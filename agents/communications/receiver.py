@@ -11,17 +11,17 @@ from .bot import invoke_conversation
 
 logger = logging.getLogger(__name__)
 
-def on_voice_command(topic: str, payload: Dict[str, Any]) -> None:
+def on_voice_command(topic: str, message: str) -> None:
     """Handle incoming voice commands.
     
     Args:
         topic: The topic on which the message was received
-        payload: Dictionary containing the command data
+        message: The text of the voice command
     """
     try:
-        logger.info(f"Processing voice command on Topic: {topic}, Payload: {payload}")
+        logger.info(f"Processing voice command on Topic: {topic}, message: {message}")
 
-        asyncio.create_task(invoke_conversation(payload["sentences"][-1]["text"], thread_id=1))
+        asyncio.create_task(invoke_conversation(message, thread_id=1))
     
     except Exception as e:
         logger.error(f"Error processing voice command: {e}", exc_info=True)

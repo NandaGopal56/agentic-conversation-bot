@@ -33,10 +33,7 @@ class UIService:
         try:
             while True:
                 frame = await websocket.receive_bytes()
-                await self.bus.publish(
-                    "ui/camera/frame",
-                    {"bytes": frame, "format": "jpeg"}
-                )
+                await self.bus.publish("camera/front", frame)
         except Exception:
             logger.info("Camera WS disconnected")
 

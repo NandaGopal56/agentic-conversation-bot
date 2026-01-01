@@ -72,7 +72,13 @@ def fanout_selector(state: State) -> list[str]:
 
     tools = state.get("tool_classifier_result", [])
 
-    return [enum_to_node[t] for t in tools if t in enum_to_node]
+    selected = [enum_to_node[t] for t in tools if t in enum_to_node]
+
+    # default path
+    if not selected:
+        return ["call_model"]
+
+    return selected
 
 
 def join_after_tools(state: State) -> State:
