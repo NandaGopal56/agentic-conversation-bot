@@ -17,6 +17,7 @@ from .state import State
 from ..tools.basic_tools import basic_tools
 from ..storage import update_tool_result, add_tool_call, add_message, get_full_thread
 from .schemas import ToolClassifierOutput, ToolEnum
+from ..VideoTopicBuffer import video_buffer
 
 load_dotenv()
 
@@ -139,7 +140,9 @@ async def video_capture(state: dict, config: RunnableConfig) -> Dict[str, Any]:
     
     print("Video capture")
 
-    image_url = "https://ihe-delft-ihe-website-production.s3.eu-central-1.amazonaws.com/s3fs-public/styles/530x530/public/2022-11/Sea%20level%20rise%20Vietnam.jpg"
+    image_url = video_buffer.latest()
+
+    print(image_url)
 
     return {
         "messages": [

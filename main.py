@@ -9,6 +9,7 @@ import logging
 from stt_audio_processor.stt_processor import STTAudioProcessorService
 from tts_audio_processor.tts_processor import TTSAudioProcessorService
 from agents.agent_processor import AgentProcessor
+from live_interaction.ui_service import UIService
 
 # Configure logging
 logging.basicConfig(
@@ -20,22 +21,22 @@ logger = logging.getLogger(__name__)
 
 async def async_main():
     """Async main entry point for the Agetic Conversation Bot."""
-    stt_audio_processor = None
-    agent_processor = None
     
     try:
         logger.info("Starting Agetic Conversation Bot...")
         
         # Initialize services with the shared bus
-        stt_audio_processor = STTAudioProcessorService()
+        # stt_audio_processor = STTAudioProcessorService()
+        # tts_audio_processor = TTSAudioProcessorService()
         agent_processor = AgentProcessor()
-        tts_audio_processor = TTSAudioProcessorService()
+        ui_service = UIService()
 
         # Start services
         await asyncio.gather(
-            stt_audio_processor.start(),
+            # stt_audio_processor.start(),
+            # tts_audio_processor.start(),
             agent_processor.start(),
-            tts_audio_processor.start()
+            ui_service.start()
         )
         
         # Keep the application running until interrupted
@@ -51,9 +52,10 @@ async def async_main():
 
         # stop all the services
         await asyncio.gather(
-            stt_audio_processor.stop(),
+            # stt_audio_processor.stop(),
+            # tts_audio_processor.stop(),
             agent_processor.stop(),
-            tts_audio_processor.stop()
+            ui_service.stop()
         )
         
         logger.info("Agetic Conversation Bot has been shut down")
