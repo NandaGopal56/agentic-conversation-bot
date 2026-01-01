@@ -3,6 +3,7 @@ Node definitions for the conversation graph.
 Each function represents a node in the graph.
 """
 import logging
+import base64
 from typing import Dict, Any, List, Union
 from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage, ToolMessage, SystemMessage
 from langchain_core.prompts.chat import ChatPromptTemplate
@@ -144,17 +145,31 @@ async def path_selector_post_tool_classifier(state: dict, config: RunnableConfig
 
 async def video_capture(state: dict, config: RunnableConfig) -> Dict[str, Any]:
     
-    print("Video capture")
+    latest_payload = video_buffer.latest()
 
-    image_url = video_buffer.latest()
+    # Convert payload to a URL string that OpenAI vision expects
+    data_url: str | None = None
+    if isinstance(latest_payload, (bytes, bytearray)):
+        b64 = base64.b64encode(latest_payload).decode("ascii")
+        data_url = f"data:image/jpeg;base64,{b64}"
+    elif isinstance(latest_payload, str):
+        # If it's already a data URL or a regular URL, pass through
+        data_url = latest_payload
 
-    print(image_url)
+    if not data_url:
+        return {
+            "messages": [
+                HumanMessage(content=[
+                    {"type": "text", "text": "No recent camera frame available."}
+                ])
+            ]
+        }
 
     return {
         "messages": [
             HumanMessage(content=[
                 {"type": "text", "text": "Here is the image:"},
-                {"type": "image_url", "image_url": {"url": image_url}}
+                {"type": "image_url", "image_url": {"url": data_url}}
             ])
         ]
     }

@@ -12,7 +12,7 @@ class VideoTopicBuffer:
         self.window_seconds = window_seconds
         self.buffer: Deque[Tuple[float, Dict[str, Any]]] = deque()
 
-    async def on_frame(self, topic: str, payload: Dict[str, Any]):
+    def on_frame(self, topic: str, payload: Dict[str, Any]):
         now = time.time()
         self.buffer.append((now, payload))
 

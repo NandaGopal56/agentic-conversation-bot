@@ -33,7 +33,7 @@ agetic_conversation_bot/
 │   ├── logger.py                 # Centralized logging (rotating file + colored console)
 │   ├── receiver.py               # Bus message handlers (e.g., on_human_message)
 │   ├── storage.py                # Persistence helpers
-│   └── text_writer.py            # Writes AI text to the bus for TTS
+│   └── writer.py            # Writes AI text to the bus for TTS
 │
 ├── communication_bus/
 │   └── inmemory_bus.py           # Simple pub/sub bus used across services
@@ -73,7 +73,7 @@ agetic_conversation_bot/
 
 3. The Agent service (`agents/agent_processor.py`) subscribes to bus topics and orchestrates conversation logic.
    - `agents/bot.py` defines `run_conversation()`/`invoke_conversation()` that build and run a LangGraph workflow.
-   - As the LLM streams responses, partial chunks are yielded and forwarded to TTS via `agents/text_writer.py`.
+   - As the LLM streams responses, partial chunks are yielded and forwarded to TTS via `agents/writer.py`.
    - On completion, final messages are persisted with `agents/storage.py`.
 
 4. The TTS service (`tts_audio_processor/tts_processor.py`) subscribes to the text stream and synthesizes speech using `tts_service.py`.
