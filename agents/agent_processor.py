@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from communication_bus.inmemory_bus import InMemoryBus, bus
-from .communications.receiver import on_voice_command
+from .communications.receiver import on_human_message
 from .VideoTopicBuffer import VideoTopicBuffer, video_buffer
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class AgentProcessor:
         try:
             logger.info("Starting Agent Service...")
             await self.bus.connect()
-            self.bus.subscribe("voice/commands", on_voice_command)
+            self.bus.subscribe("voice/commands", on_human_message)
             self.bus.subscribe("camera/front", self.video_buffer.on_frame)
 
             self._is_running = True

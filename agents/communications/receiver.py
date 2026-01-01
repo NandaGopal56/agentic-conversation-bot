@@ -11,7 +11,7 @@ from .bot import invoke_conversation
 
 logger = logging.getLogger(__name__)
 
-def on_voice_command(topic: str, message: str) -> None:
+def on_human_message(topic: str, message: str) -> None:
     """Handle incoming voice commands.
     
     Args:

@@ -31,7 +31,7 @@ agetic_conversation_bot/
 │   │   ├── state.py              # Graph state dataclasses
 │   │   └── workflow.py           # Workflow construction
 │   ├── logger.py                 # Centralized logging (rotating file + colored console)
-│   ├── receiver.py               # Bus message handlers (e.g., on_voice_command)
+│   ├── receiver.py               # Bus message handlers (e.g., on_human_message)
 │   ├── storage.py                # Persistence helpers
 │   └── text_writer.py            # Writes AI text to the bus for TTS
 │
