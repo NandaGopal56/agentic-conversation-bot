@@ -12,7 +12,6 @@ from live_interaction.ui_service import UIService
 
 # demo code
 from communication_bus.inmemory_bus import bus
-from agents.bot import invoke_conversation
 
 # -------------------------------------------------------------------
 # Logging
@@ -28,27 +27,9 @@ logger = logging.getLogger(__name__)
 # Extra async work (your custom logic)
 # -------------------------------------------------------------------
 async def other_operations():
-    """
-    Any additional async operations you want to run
-    after services are started.
-    """
+    """Placeholder for background tasks. Non-blocking."""
     while True:
-        try:
-            user_input = input("You: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            break
-
-        if not user_input:
-            continue
-        if user_input.lower() in {"exit", "quit"}:
-            break
-
-        print("Assistant: ", end="", flush=True)
-
-        async for token in invoke_conversation(user_input, thread_id=13):
-            print(token, end="", flush=True)
-
-        print("\n")
+        await asyncio.sleep(3600)
 
 
 # -------------------------------------------------------------------
@@ -89,9 +70,7 @@ async def async_main():
         logger.info("All services started")
 
         # Run background tasks
-        background_tasks = [
-            asyncio.create_task(other_operations()),
-        ]
+        background_tasks = [asyncio.create_task(other_operations())]
 
         # Keep app alive until shutdown
         await shutdown_event.wait()
