@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neural Assistant</title>
+    <title>Alexa</title>
     <style>
         * {
             margin: 0;
@@ -20,14 +19,12 @@
             --bg-secondary: #2C2C2E;
             --text-primary: #FFFFFF;
             --text-secondary: #8E8E93;
-            --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             --success: #30D158;
             --user-bubble: #0A84FF;
             --ai-bubble: #2C2C2E;
         }
 
-        body,
-        html {
+        body, html {
             width: 100%;
             height: 100%;
             background: var(--bg-dark);
@@ -37,148 +34,77 @@
         }
 
         #app {
-            display: grid;
-            grid-template-columns: 380px 1fr 420px;
-            height: 100vh;
-            gap: 0;
-        }
-
-        /* LEFT PANEL - VIDEO FEED */
-        #video-panel {
-            background: var(--bg-card);
             display: flex;
             flex-direction: column;
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            height: 100vh;
+            max-width: 100vw;
+            overflow: hidden;
         }
 
-        .panel-header {
-            padding: 24px 24px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .panel-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .status-indicator {
-            width: 6px;
-            height: 6px;
-            background: var(--success);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-            box-shadow: 0 0 8px var(--success);
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(0.95); }
-        }
-
-        .video-container {
+        /* Main Content Area - Video */
+        .main-content {
             flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            padding: 20px;
             position: relative;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: min(60vh, 60vw);
+            aspect-ratio: 1;
         }
 
         #camera {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 16px;
+            border-radius: 24px;
             background: #000;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
         }
 
-        .video-overlay {
-            position: absolute;
-            bottom: 40px;
-            left: 40px;
-            right: 40px;
-            display: flex;
-            gap: 12px;
-        }
 
-        .stat-card {
-            flex: 1;
-            background: rgba(28, 28, 30, 0.95);
-            backdrop-filter: blur(20px);
-            padding: 12px 16px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
 
-        .stat-label {
-            font-size: 11px;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-        }
-
-        .stat-value {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        /* CENTER PANEL - ANIMATION */
-        #animation-panel {
-            background: var(--bg-dark);
+        /* Bottom Section - Chat & Controls */
+        .bottom-section {
+            background: var(--bg-card);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            overflow: hidden;
+            flex-shrink: 0;
+            max-height: 45vh;
+            min-height: 280px;
         }
 
-        .animation-bg {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle at center, rgba(102, 126, 234, 0.15) 0%, transparent 70%);
-            opacity: 0.6;
-        }
-
-        /* Siri-like Wave Animation */
-        .wave-container {
-            position: relative;
-            width: 400px;
-            height: 400px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .wave {
-            position: absolute;
-            width: 100%;
-            height: 8px;
+        /* Voice Animation */
+        .voice-animation {
+            padding: 16px 0;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 4px;
+            height: 60px;
+            background: linear-gradient(180deg, transparent 0%, rgba(102, 126, 234, 0.05) 100%);
+            flex-shrink: 0;
         }
 
         .wave-bar {
             width: 4px;
-            height: 8px;
             background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
             border-radius: 4px;
             animation: wave 1.2s ease-in-out infinite;
+            opacity: 0.6;
         }
 
         @keyframes wave {
-            0%, 100% { height: 8px; opacity: 0.3; }
-            50% { height: 120px; opacity: 1; }
+            0%, 100% { height: 6px; }
+            50% { height: 32px; }
         }
 
         .wave-bar:nth-child(1) { animation-delay: 0s; }
@@ -186,88 +112,46 @@
         .wave-bar:nth-child(3) { animation-delay: 0.2s; }
         .wave-bar:nth-child(4) { animation-delay: 0.3s; }
         .wave-bar:nth-child(5) { animation-delay: 0.4s; }
-        .wave-bar:nth-child(6) { animation-delay: 0.3s; }
-        .wave-bar:nth-child(7) { animation-delay: 0.2s; }
-        .wave-bar:nth-child(8) { animation-delay: 0.1s; }
-        .wave-bar:nth-child(9) { animation-delay: 0s; }
+        .wave-bar:nth-child(6) { animation-delay: 0.5s; }
+        .wave-bar:nth-child(7) { animation-delay: 0.4s; }
+        .wave-bar:nth-child(8) { animation-delay: 0.3s; }
+        .wave-bar:nth-child(9) { animation-delay: 0.2s; }
+        .wave-bar:nth-child(10) { animation-delay: 0.1s; }
+        .wave-bar:nth-child(11) { animation-delay: 0s; }
 
-        .orb {
-            position: absolute;
-            width: 200px;
-            height: 200px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50%;
-            filter: blur(40px);
-            opacity: 0.4;
-            animation: float 6s ease-in-out infinite;
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            33% { transform: translate(30px, -30px) scale(1.1); }
-            66% { transform: translate(-30px, 30px) scale(0.9); }
-        }
-
-        .status-text {
-            position: absolute;
-            bottom: 80px;
-            font-size: 16px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            z-index: 10;
-        }
-
-        .mode-indicator {
-            position: absolute;
-            top: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 8px 20px;
-            background: rgba(28, 28, 30, 0.8);
-            backdrop-filter: blur(20px);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--primary);
-            z-index: 10;
-        }
-
-        /* RIGHT PANEL - CONVERSATION */
-        #conversation-panel {
-            background: var(--bg-card);
-            display: flex;
-            flex-direction: column;
-            border-left: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        #messages {
+        /* Chat Container */
+        .chat-container {
             flex: 1;
             overflow-y: auto;
-            padding: 24px;
+            padding: 16px 24px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 12px;
+            min-height: 100px;
+            max-height: 200px;
         }
 
-        #messages::-webkit-scrollbar {
+        .chat-container::-webkit-scrollbar {
             width: 6px;
         }
 
-        #messages::-webkit-scrollbar-track {
+        .chat-container::-webkit-scrollbar-track {
             background: transparent;
         }
 
-        #messages::-webkit-scrollbar-thumb {
+        .chat-container::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.2);
             border-radius: 3px;
         }
 
         .message {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
+            align-items: flex-start;
+            gap: 12px;
             animation: slideIn 0.3s ease-out;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
         }
 
         @keyframes slideIn {
@@ -281,21 +165,15 @@
             }
         }
 
-        .message-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 0 4px;
-        }
-
         .message-avatar {
-            width: 24px;
-            height: 24px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
+            font-size: 16px;
+            flex-shrink: 0;
         }
 
         .message.user .message-avatar {
@@ -306,59 +184,45 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
 
+        .message-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .message-name {
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 600;
-            color: var(--text-secondary);
+            color: var(--text-primary);
         }
 
         .message-time {
             font-size: 11px;
             color: var(--text-secondary);
-            margin-left: auto;
         }
 
-        .message-bubble {
-            padding: 12px 16px;
-            border-radius: 16px;
+        .message-text {
             font-size: 14px;
             line-height: 1.5;
-            max-width: 85%;
-        }
-
-        .message.user {
-            align-items: flex-end;
-        }
-
-        .message.user .message-bubble {
-            background: var(--user-bubble);
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-
-        .message.ai {
-            align-items: flex-start;
-        }
-
-        .message.ai .message-bubble {
-            background: var(--ai-bubble);
             color: var(--text-primary);
-            border-bottom-left-radius: 4px;
         }
 
         .typing-indicator {
             display: flex;
             gap: 4px;
-            padding: 16px;
-            background: var(--ai-bubble);
-            border-radius: 16px;
-            border-bottom-left-radius: 4px;
-            width: fit-content;
+            padding: 8px;
         }
 
         .typing-dot {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             background: var(--text-secondary);
             border-radius: 50%;
             animation: typing 1.4s infinite;
@@ -369,28 +233,27 @@
 
         @keyframes typing {
             0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
-            30% { opacity: 1; transform: translateY(-8px); }
+            30% { opacity: 1; transform: translateY(-4px); }
         }
 
         /* Input Area */
         .input-area {
-            padding: 20px 24px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            background: var(--bg-secondary);
+            padding: 16px 24px 24px;
+            flex-shrink: 0;
         }
 
-        .input-container {
+        .input-wrapper {
             display: flex;
             gap: 12px;
             align-items: center;
-            background: var(--bg-card);
-            border-radius: 24px;
-            padding: 4px 4px 4px 20px;
+            background: var(--bg-secondary);
+            border-radius: 28px;
+            padding: 8px 8px 8px 20px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             transition: border-color 0.2s;
         }
 
-        .input-container:focus-within {
+        .input-wrapper:focus-within {
             border-color: var(--primary);
         }
 
@@ -402,17 +265,16 @@
             color: var(--text-primary);
             font-size: 14px;
             font-family: inherit;
-            padding: 12px 0;
+            padding: 10px 0;
         }
 
         #user-input::placeholder {
             color: var(--text-secondary);
         }
 
-        #send-btn {
-            width: 36px;
-            height: 36px;
-            background: var(--primary);
+        .control-btn {
+            width: 40px;
+            height: 40px;
             border: none;
             border-radius: 50%;
             color: white;
@@ -422,6 +284,32 @@
             align-items: center;
             justify-content: center;
             transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        #voice-btn {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #voice-btn:hover {
+            background: var(--bg-secondary);
+            transform: scale(1.05);
+        }
+
+        #voice-btn.active {
+            background: #FF3B30;
+            border-color: #FF3B30;
+            animation: pulse-btn 1.5s infinite;
+        }
+
+        @keyframes pulse-btn {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        #send-btn {
+            background: var(--primary);
         }
 
         #send-btn:hover {
@@ -429,185 +317,187 @@
             transform: scale(1.05);
         }
 
-        #send-btn:active {
+        #send-btn:active, .control-btn:active {
             transform: scale(0.95);
         }
 
-        /* Quick Actions */
-        .quick-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-            flex-wrap: wrap;
-        }
-
-        .quick-action {
-            padding: 8px 16px;
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            font-size: 12px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .quick-action:hover {
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            border-color: var(--primary);
-        }
-
         /* Responsive */
-        @media (max-width: 1400px) {
-            #app {
-                grid-template-columns: 320px 1fr 380px;
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 16px;
+            }
+
+            .video-wrapper {
+                max-width: min(50vh, 85vw);
+            }
+
+            .bottom-section {
+                max-height: 50vh;
+                min-height: 240px;
+            }
+
+            .voice-animation {
+                height: 50px;
+                padding: 12px 0;
+            }
+
+            .chat-container {
+                padding: 12px 16px;
+                max-height: 150px;
+            }
+
+            .input-area {
+                padding: 12px 16px 20px;
+            }
+
+            .input-wrapper {
+                padding: 6px 6px 6px 16px;
+            }
+
+            .control-btn {
+                width: 36px;
+                height: 36px;
             }
         }
 
-        @media (max-width: 1024px) {
-            #app {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto 1fr auto;
+        @media (max-height: 600px) {
+            .main-content {
+                padding: 12px;
             }
 
-            #video-panel {
-                border-right: none;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                max-height: 30vh;
+            .video-wrapper {
+                max-width: min(40vh, 50vw);
             }
 
-            #animation-panel {
-                display: none;
+            .bottom-section {
+                min-height: 200px;
+                max-height: 50vh;
             }
 
-            #conversation-panel {
-                border-left: none;
+            .voice-animation {
+                height: 40px;
+                padding: 8px 0;
+            }
+
+            .chat-container {
+                max-height: 100px;
+                min-height: 80px;
             }
         }
     </style>
 </head>
-
 <body>
     <div id="app">
-        <!-- LEFT: VIDEO FEED -->
-        <div id="video-panel">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <span class="status-indicator"></span>
-                    Live Video
-                </div>
-            </div>
-            <div class="video-container">
+        <!-- Main Content - Video Display -->
+        <div class="main-content">
+            <div class="video-wrapper">
                 <video id="camera" autoplay muted playsinline></video>
-                <div class="video-overlay">
-                    <div class="stat-card">
-                        <div class="stat-label">FPS</div>
-                        <div class="stat-value">30</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Quality</div>
-                        <div class="stat-value">HD</div>
-                    </div>
-                </div>
             </div>
         </div>
 
-        <!-- CENTER: ANIMATION -->
-        <div id="animation-panel">
-            <div class="animation-bg"></div>
-            <div class="mode-indicator" id="mode-indicator">● Listening</div>
-            
-            <div class="wave-container">
-                <div class="orb"></div>
-                <div class="wave">
-                    <div class="wave-bar"></div>
-                    <div class="wave-bar"></div>
-                    <div class="wave-bar"></div>
-                    <div class="wave-bar"></div>
-                    <div class="wave-bar"></div>
-                    <div class="wave-bar"></div>
-                    <div class="wave-bar"></div>
-                    <div class="wave-bar"></div>
-                    <div class="wave-bar"></div>
-                </div>
+        <!-- Bottom Section -->
+        <div class="bottom-section">
+            <!-- Voice Animation -->
+            <div class="voice-animation" id="voice-animation">
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
             </div>
 
-            <div class="status-text" id="status-text">Ready to assist</div>
-        </div>
-
-        <!-- RIGHT: CONVERSATION -->
-        <div id="conversation-panel">
-            <div class="panel-header">
-                <div class="panel-title">Conversation</div>
-            </div>
-            
-            <div id="messages">
+            <!-- Chat Messages -->
+            <div class="chat-container" id="chat-container">
                 <div class="message ai">
-                    <div class="message-header">
-                        <div class="message-avatar">🤖</div>
-                        <div class="message-name">Neural Assistant</div>
-                        <div class="message-time">Now</div>
-                    </div>
-                    <div class="message-bubble">
-                        Hello! I'm your AI assistant. How can I help you today?
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        <div class="message-header">
+                            <div class="message-name">Alexa</div>
+                            <div class="message-time">Now</div>
+                        </div>
+                        <div class="message-text">Hello! I'm your AI assistant. How can I help you today?</div>
                     </div>
                 </div>
             </div>
 
+            <!-- Input Area -->
             <div class="input-area">
-                <div class="input-container">
+                <div class="input-wrapper">
                     <input 
                         type="text" 
                         id="user-input" 
                         placeholder="Type your message..."
                         autocomplete="off"
                     />
-                    <button id="send-btn">↑</button>
-                </div>
-                <div class="quick-actions">
-                    <div class="quick-action" onclick="quickMessage('Tell me about yourself')">About you</div>
-                    <div class="quick-action" onclick="quickMessage('What can you do?')">Capabilities</div>
-                    <div class="quick-action" onclick="quickMessage('Help me with something')">Get help</div>
+                    <button id="voice-btn" class="control-btn" title="Voice input">🎤</button>
+                    <button id="send-btn" class="control-btn" title="Send message">↑</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Animation Controller
-        const animationController = {
-            mode: 'listening',
-            statusText: document.getElementById('status-text'),
-            modeIndicator: document.getElementById('mode-indicator'),
-
-            setMode(mode) {
-                this.mode = mode;
-                const modes = {
-                    'listening': { text: 'Ready to assist', indicator: '● Listening', color: '#30D158' },
-                    'thinking': { text: 'Processing...', indicator: '◐ Thinking', color: '#FF9F0A' },
-                    'speaking': { text: 'Speaking...', indicator: '◉ Speaking', color: '#0A84FF' },
-                    'idle': { text: 'Idle', indicator: '○ Idle', color: '#8E8E93' }
-                };
-
-                const config = modes[mode];
-                this.statusText.textContent = config.text;
-                this.modeIndicator.textContent = config.indicator;
-                this.modeIndicator.style.color = config.color;
-            }
-        };
-
         // Message System
         const messageSystem = {
-            container: document.getElementById('messages'),
+            container: document.getElementById('chat-container'),
             input: document.getElementById('user-input'),
             sendBtn: document.getElementById('send-btn'),
+            voiceBtn: document.getElementById('voice-btn'),
+            voiceAnimation: document.getElementById('voice-animation'),
+            isRecording: false,
+            recognition: null,
 
             init() {
                 this.sendBtn.addEventListener('click', () => this.sendMessage());
+                this.voiceBtn.addEventListener('click', () => this.toggleVoice());
                 this.input.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') this.sendMessage();
                 });
+
+                // Initialize speech recognition if available
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    this.recognition = new SpeechRecognition();
+                    this.recognition.continuous = false;
+                    this.recognition.interimResults = false;
+                    
+                    this.recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        this.input.value = transcript;
+                        this.sendMessage();
+                    };
+                    
+                    this.recognition.onend = () => {
+                        this.isRecording = false;
+                        this.voiceBtn.classList.remove('active');
+                        this.animateVoice(false);
+                    };
+                }
+            },
+
+            toggleVoice() {
+                if (!this.recognition) {
+                    alert('Speech recognition is not supported in your browser');
+                    return;
+                }
+
+                if (this.isRecording) {
+                    this.recognition.stop();
+                    this.isRecording = false;
+                    this.voiceBtn.classList.remove('active');
+                    this.animateVoice(false);
+                } else {
+                    this.recognition.start();
+                    this.isRecording = true;
+                    this.voiceBtn.classList.add('active');
+                    this.animateVoice(true);
+                }
             },
 
             sendMessage() {
@@ -617,17 +507,13 @@
                 this.addMessage('user', text);
                 this.input.value = '';
                 
-                animationController.setMode('thinking');
+                this.animateVoice(true);
                 this.showTyping();
 
                 setTimeout(() => {
                     this.hideTyping();
-                    animationController.setMode('speaking');
                     this.addMessage('ai', this.generateResponse(text));
-                    
-                    setTimeout(() => {
-                        animationController.setMode('listening');
-                    }, 1000);
+                    this.animateVoice(false);
                 }, 2000);
             },
 
@@ -641,12 +527,14 @@
                 });
 
                 message.innerHTML = `
-                    <div class="message-header">
-                        <div class="message-avatar">${type === 'user' ? '👤' : '🤖'}</div>
-                        <div class="message-name">${type === 'user' ? 'You' : 'Neural Assistant'}</div>
-                        <div class="message-time">${time}</div>
+                    <div class="message-avatar">${type === 'user' ? '👤' : '🤖'}</div>
+                    <div class="message-content">
+                        <div class="message-header">
+                            <div class="message-name">${type === 'user' ? 'You' : 'Alexa'}</div>
+                            <div class="message-time">${time}</div>
+                        </div>
+                        <div class="message-text">${text}</div>
                     </div>
-                    <div class="message-bubble">${text}</div>
                 `;
 
                 this.container.appendChild(message);
@@ -658,14 +546,13 @@
                 typing.id = 'typing-indicator';
                 typing.className = 'message ai';
                 typing.innerHTML = `
-                    <div class="message-header">
-                        <div class="message-avatar">🤖</div>
-                        <div class="message-name">Neural Assistant</div>
-                    </div>
-                    <div class="typing-indicator">
-                        <div class="typing-dot"></div>
-                        <div class="typing-dot"></div>
-                        <div class="typing-dot"></div>
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        <div class="typing-indicator">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
                     </div>
                 `;
                 this.container.appendChild(typing);
@@ -677,12 +564,19 @@
                 if (typing) typing.remove();
             },
 
+            animateVoice(active) {
+                const bars = this.voiceAnimation.querySelectorAll('.wave-bar');
+                bars.forEach(bar => {
+                    bar.style.opacity = active ? '1' : '0.6';
+                    bar.style.animationPlayState = active ? 'running' : 'running';
+                });
+            },
+
             generateResponse(input) {
                 const responses = {
                     'hello': 'Hello! How can I assist you today?',
                     'help': 'I can help you with various tasks, answer questions, and provide information. What do you need?',
-                    'about': 'I\'m Neural Assistant, an advanced AI designed to help you with information, tasks, and conversation.',
-                    'capabilities': 'I can answer questions, provide information, help with tasks, and engage in natural conversation. What would you like to explore?',
+                    'about': 'I\'m Alexa, an advanced AI designed to help you with information, tasks, and conversation.',
                     'default': 'I understand. Let me help you with that. What specific information are you looking for?'
                 };
 
@@ -690,11 +584,6 @@
                 return responses[key] || responses['default'];
             }
         };
-
-        function quickMessage(text) {
-            messageSystem.input.value = text;
-            messageSystem.sendMessage();
-        }
 
         // Camera Setup
         document.addEventListener("DOMContentLoaded", async () => {
@@ -709,24 +598,30 @@
                 video.srcObject = stream;
                 await video.play();
 
-                const ws = new WebSocket("ws://localhost:8000/ws/camera");
-                const canvas = document.createElement("canvas");
-                const ctx = canvas.getContext("2d");
+                // WebSocket connection (if backend available)
+                try {
+                    const ws = new WebSocket("ws://localhost:8000/ws/camera");
+                    const canvas = document.createElement("canvas");
+                    const ctx = canvas.getContext("2d");
 
-                ws.onopen = () => console.log("Camera WebSocket connected");
-                
-                setInterval(() => {
-                    if (ws.readyState !== WebSocket.OPEN || video.videoWidth === 0) return;
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0);
-                    canvas.toBlob(blob => blob && ws.send(blob), "image/jpeg", 0.7);
-                }, 1000);
+                    ws.onopen = () => console.log("Camera WebSocket connected");
+                    
+                    setInterval(() => {
+                        if (ws.readyState !== WebSocket.OPEN || video.videoWidth === 0) return;
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        ctx.drawImage(video, 0, 0);
+                        canvas.toBlob(blob => blob && ws.send(blob), "image/jpeg", 0.7);
+                    }, 1000);
+                } catch (wsError) {
+                    console.log("WebSocket not available, running in demo mode");
+                }
             } catch (err) {
                 console.error("Camera error:", err);
+                // Show placeholder if camera not available
+                video.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
             }
         });
     </script>
 </body>
-
 </html>
