@@ -5,8 +5,9 @@ from openai import OpenAI
 from typing import Optional, Dict, Any
 import asyncio
 from .logger import logger
+import os
 
-client = OpenAI()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 async def transcribe_audio_by_openai(
     audio_np: np.ndarray, 

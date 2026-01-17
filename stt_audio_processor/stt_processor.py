@@ -27,6 +27,8 @@ class STTAudioProcessorService:
             # Start the assistant in a separate task
             self._is_running = True
             self._run_task = asyncio.create_task(self._run())
+
+            await self._run_task
             
         except Exception as e:
             logger.error(f"Failed to start audio processor: {e}", exc_info=True)
@@ -39,8 +41,9 @@ class STTAudioProcessorService:
         try:
             if self.assistant:
                 await self.assistant.run()
-        except asyncio.CancelledError:
-            logger.info("Audio processor run task cancelled")
+        except asyncio.CancelledError as e:
+            logger.error(f"Audio processor run task cancelled: {e}", exc_info=True)
+            raise
         except Exception as e:
             logger.error(f"Error in audio processor run task: {e}", exc_info=True)
             raise

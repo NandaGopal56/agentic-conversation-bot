@@ -24,15 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 # -------------------------------------------------------------------
-# Extra async work (your custom logic)
-# -------------------------------------------------------------------
-async def other_operations():
-    """Placeholder for background tasks. Non-blocking."""
-    while True:
-        await asyncio.sleep(3600)
-
-
-# -------------------------------------------------------------------
 # Main async entry point
 # -------------------------------------------------------------------
 async def async_main():
@@ -68,9 +59,6 @@ async def async_main():
         )
 
         logger.info("All services started")
-
-        # Run background tasks
-        background_tasks = [asyncio.create_task(other_operations())]
 
         # Keep app alive until shutdown
         await shutdown_event.wait()

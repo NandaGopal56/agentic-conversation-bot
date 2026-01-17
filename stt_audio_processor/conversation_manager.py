@@ -65,8 +65,8 @@ class ConversationManager:
             return None
         try:
             result = await transcribe_audio_by_openai(audio_np)
-            text = result.get("text", "").strip()
-            return text if text else None
+            text = result.get("text", "")
+            return text.strip() if text else None
         except Exception as e:
             logger.error(f"Transcription error: {e}")
             return None
